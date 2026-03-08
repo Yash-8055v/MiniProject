@@ -1,0 +1,10 @@
+# ===============================
+# LLM Configuration
+# ===============================
+LLM_API_KEY=your_google_gemini_api_key_here
+
+# ===============================
+# Web Search API
+# ===============================
+SEARCH_API_KEY=your_serpapi_key_here
+SEARCH_PROVIDER=serpapi

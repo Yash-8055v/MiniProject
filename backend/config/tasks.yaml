@@ -1,0 +1,55 @@
+interpret_and_summarize_task:
+  description: >
+    You are given a claim and web search evidence. Do TWO things:
+
+    1. Restate this claim clearly in simple English:
+    Original claim: "{claim}"
+    English version: "{english_claim}"
+
+    2. Summarize the key findings from these search results:
+    {evidence}
+
+    Combine into a clear response with the restated claim and evidence summary.
+  expected_output: >
+    A clear English restatement of the claim followed by a brief
+    summary of key evidence points from the search results.
+  agent: interpreter_agent
+
+
+analyze_and_verify_task:
+  description: >
+    You received a clarified claim and evidence summary from the
+    previous task. Now do the following:
+
+    Claim: "{english_claim}"
+
+    1. Does the evidence support, contradict, or leave the claim
+       unconfirmed?
+    2. Choose ONE verdict: Likely True, Likely False, or Likely Misleading
+    3. Assign a confidence score between 0 and 100
+
+    Be concise and use the evidence from the previous task.
+  expected_output: >
+    A short analysis with verdict (Likely True/False/Misleading)
+    and confidence score (0-100).
+  agent: analyzer_agent
+
+
+final_response_task:
+  description: >
+    Using the analysis, verdict, and confidence from the previous
+    task, create the final user-facing response.
+
+    Original claim: "{claim}"
+
+    Output ONLY valid JSON with these exact keys:
+    - verdict (one of: "Likely True", "Likely False", "Likely Misleading")
+    - confidence (integer 0-100)
+    - english (2-3 sentence explanation)
+    - hindi (same explanation in Hindi, Devanagari script)
+    - marathi (same explanation in Marathi, Devanagari script)
+
+    Return ONLY the JSON object, no markdown, no extra text.
+  expected_output: >
+    A JSON object with keys: verdict, confidence, english, hindi, marathi.
+  agent: response_agent
