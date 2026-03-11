@@ -79,27 +79,7 @@ const About = () => {
           </div>
         </section>
 
-        {/* SDG 16 Section */}
-        <section className="mb-16">
-          <div className="glass-card p-8">
-            <div className="flex items-start gap-6">
-              <div className="w-16 h-16 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0">
-                <span className="text-2xl font-bold text-primary">16</span>
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-foreground mb-2">
-                  SDG 16: Peace, Justice & Strong Institutions
-                </h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  TruthCrew aligns with the United Nations Sustainable Development Goal 16,
-                  which promotes peaceful and inclusive societies, access to justice for all,
-                  and building effective, accountable institutions at all levels.
-                  Combating misinformation is essential for maintaining public trust and social harmony.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
+
 
         {/* Closing Tagline */}
         <section className="text-center">
@@ -111,15 +91,7 @@ const About = () => {
           </div>
         </section>
 
-        {/* Team Credit */}
-        <section className="mt-12 text-center">
-          <p className="text-muted-foreground text-sm">
-            Awareness before amplification
-          </p>
-          <p className="text-foreground font-semibold mt-2">
-            Team LeoForge
-          </p>
-        </section>
+
       </div>
     </div>
   );

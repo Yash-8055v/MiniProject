@@ -9,3 +9,6 @@ wheels/
 # Virtual environments
 .venv
 .env
+
+# Lock file (large, not needed for deployment)
+uv.lock
