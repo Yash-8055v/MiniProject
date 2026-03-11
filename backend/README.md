@@ -4,7 +4,7 @@ This backend powers an AI-based fake news verification system that
 analyzes user-provided claims and evaluates them using web evidence and
 an LLM-powered multi-agent pipeline.
 
-The system uses **CrewAI agents**, **web search evidence**, and **Gemini
+The system uses **CrewAI agents**, **web search evidence**, and **Groq
 LLM** to determine whether a claim is likely true, false, or misleading.
 
 ------------------------------------------------------------------------
@@ -13,7 +13,7 @@ LLM** to determine whether a claim is likely true, false, or misleading.
 
 -   Multi-agent AI verification system
 -   Real-time web search evidence collection
--   AI reasoning using Gemini LLM
+-   AI reasoning using Groq LLM
 -   Multilingual explanations (English, Hindi, Marathi)
 -   FastAPI backend API
 -   Modular configuration using YAML
@@ -73,7 +73,7 @@ Multilingual Explanation (EN / HI / MR)
   -------------------- ---------------
   API Framework        FastAPI
   AI Agents            CrewAI
-  LLM                  Google Gemini
+  LLM                  Groq
   Web Search           SerpAPI
   Dependency Manager   uv
   Environment Config   python-dotenv
@@ -97,7 +97,7 @@ uv add fastapi uvicorn python-multipart crewai "crewai[litellm]" google-generati
 
 ### 3. Create `.env` file
 
-    LLM_API_KEY=your_gemini_api_key
+    GROQ_API_KEY=your_groq_api_key
     SEARCH_API_KEY=your_serpapi_key
     SEARCH_PROVIDER=serpapi
 
@@ -192,7 +192,7 @@ This improves accessibility for diverse users.
 
   Variable          Purpose
   ----------------- -------------------------------
-  LLM_API_KEY       Gemini API key
+  GROQ_API_KEY      Groq API key
   SEARCH_API_KEY    SerpAPI key
   SEARCH_PROVIDER   Search provider configuration
 

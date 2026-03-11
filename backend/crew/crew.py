@@ -25,8 +25,6 @@ def parse_result(raw_output: str) -> dict:
     Parse the final agent output into a structured dict.
     Tries multiple strategies to extract JSON from LLM output.
     """
-    print(f"[DEBUG] Raw output length: {len(raw_output)}")
-    print(f"[DEBUG] Raw output (first 500 chars): {raw_output[:500]}")
 
     # Strategy 1: Strip markdown code fences and try direct json.loads
     cleaned = re.sub(r'```(?:json)?\s*', '', raw_output)
@@ -36,7 +34,6 @@ def parse_result(raw_output: str) -> dict:
     try:
         result = json.loads(cleaned)
         if isinstance(result, dict):
-            print("[DEBUG] Strategy 1 (direct parse) succeeded")
             return result
     except json.JSONDecodeError:
         pass
@@ -54,15 +51,11 @@ def parse_result(raw_output: str) -> dict:
                     json_str = cleaned[brace_start:i + 1]
                     try:
                         result = json.loads(json_str)
-                        print("[DEBUG] Strategy 2 (brace matching) succeeded")
                         return result
-                    except json.JSONDecodeError as e:
-                        print(f"[DEBUG] Strategy 2 failed: {e}")
-                        print(f"[DEBUG] Attempted JSON string (first 300 chars): {json_str[:300]}")
+                    except json.JSONDecodeError:
                         break
 
     # Strategy 3: Regex extraction of individual fields
-    print("[DEBUG] Trying Strategy 3 (field extraction)")
     verdict_match = re.search(r'"verdict"\s*:\s*"([^"]*)"', cleaned)
     confidence_match = re.search(r'"confidence"\s*:\s*(\d+)', cleaned)
     english_match = re.search(r'"english"\s*:\s*"((?:[^"\\]|\\.)*)"', cleaned)
@@ -77,10 +70,8 @@ def parse_result(raw_output: str) -> dict:
             "hindi": hindi_match.group(1) if hindi_match else "",
             "marathi": marathi_match.group(1) if marathi_match else ""
         }
-        print(f"[DEBUG] Strategy 3 succeeded: verdict={result['verdict']}, confidence={result['confidence']}")
         return result
 
-    print("[DEBUG] All strategies failed, returning fallback")
     return {
         "verdict": "Unknown",
         "confidence": 0,
@@ -152,8 +143,6 @@ def run_crew(input_data: dict):
     # Translate claim to English for better search results
     # --------------------
     english_claim = translate_claim_to_english(claim, llm)
-    print(f"[DEBUG] Original claim: {claim}")
-    print(f"[DEBUG] English claim:  {english_claim}")
 
     # --------------------
     # Create Agents
@@ -198,8 +187,6 @@ def run_crew(input_data: dict):
         for item in search_results
     )
 
-    print(f"[DEBUG] Web search returned {len(search_results)} results")
-    print(f"[DEBUG] Evidence preview: {evidence_text[:200]}...")
 
     # --------------------
     # Create Crew

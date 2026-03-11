@@ -10,10 +10,10 @@ const Home = () => {
         <section className="text-center mb-20">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium mb-8">
             <Shield className="w-4 h-4" />
-            SDG 16: Peace, Justice & Strong Institutions
+            AI-Powered Verification
           </div>
 
-          <h1 className="text-6xl md:text-7xl font-bold text-foreground mb-6 tracking-tight">
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold text-foreground mb-6 tracking-tight">
             Truth<span className="text-gradient">Crew</span>
           </h1>
 
@@ -23,7 +23,7 @@ const Home = () => {
 
           {/* Hindi Tagline */}
           <div className="my-16">
-            <p className="text-5xl md:text-7xl font-extrabold devanagari text-gradient glow-text leading-tight pt-6">
+            <p className="text-3xl sm:text-5xl md:text-7xl font-extrabold devanagari text-gradient glow-text leading-tight pt-6">
               रुकें। सोचें। जाँचें।
             </p>
           </div>
