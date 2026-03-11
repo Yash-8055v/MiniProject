@@ -157,7 +157,7 @@ UI/UX Design, Documentation
 👉 **Live Demo:** Coming Soon
 
 👉 **Source Code:**\
-https://github.com/Yash-8055v/TruthCrew
+https://github.com/Yash-8055v/MiniProject
 
 ---
 
