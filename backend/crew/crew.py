@@ -7,7 +7,7 @@ from crewai import Agent, Task, Crew, Process
 import litellm
 
 from crew.llm import get_llm
-from tools.web_search import web_search
+from tools.web_search import search_with_priority
 
 
 # Base paths
@@ -174,12 +174,24 @@ def run_crew(input_data: dict):
         tasks.append(task)
 
     # --------------------
-    # Web Search (uses English claim for better results)
+    # Web Search (trusted sources first, then open web)
     # --------------------
-    search_results = web_search(english_claim)
+    search_results = search_with_priority(english_claim, num_results=8)
 
     if not search_results:
         raise ValueError("No search results returned from web search")
+
+    # Build clean sources list for the API response
+    sources = [
+        {
+            "title": item.get("title", ""),
+            "url": item.get("url", ""),
+            "source": item.get("source", ""),
+            "trusted": item.get("trusted", False),
+        }
+        for item in search_results
+        if item.get("url")  # only include items with a real URL
+    ]
 
     # Convert search results into LLM-friendly evidence text
     evidence_text = "\n".join(
@@ -214,5 +226,8 @@ def run_crew(input_data: dict):
     # --------------------
     raw = crew_output.raw if hasattr(crew_output, 'raw') else str(crew_output)
     result = parse_result(raw)
+
+    # Attach sources so they flow through to the API response
+    result["sources"] = sources
 
     return result

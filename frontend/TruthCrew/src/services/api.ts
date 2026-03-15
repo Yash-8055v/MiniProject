@@ -1,11 +1,19 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+export interface Source {
+  title: string;
+  url: string;
+  source: string;
+  trusted: boolean;
+}
+
 export interface VerifyResponse {
   verdict: string;
   confidence: number;
   english: string;
   hindi: string;
   marathi: string;
+  sources?: Source[];
 }
 
 interface ApiResponse {

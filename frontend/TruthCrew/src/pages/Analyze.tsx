@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Search, CheckCircle, XCircle, HelpCircle, Loader2, AlertTriangle, Gauge } from 'lucide-react';
+import { Search, CheckCircle, XCircle, HelpCircle, Loader2, AlertTriangle, Gauge, ExternalLink, ShieldCheck, Globe } from 'lucide-react';
 import LanguageSelector from '../components/LanguageSelector';
 import IndiaMap from '../components/IndiaMap';
-import { verifyNews, type VerifyResponse } from '../services/api';
+import { verifyNews, type VerifyResponse, type Source } from '../services/api';
 
 type VerdictType = 'likely_true' | 'likely_false' | 'likely_misleading' | 'unverified';
 type Language = 'en' | 'hi' | 'mr';
@@ -30,6 +30,7 @@ const Analyze = () => {
   const [apiResult, setApiResult] = useState<VerifyResponse | null>(null);
   const [selectedLang, setSelectedLang] = useState<Language>('en');
   const [error, setError] = useState<string | null>(null);
+  const [showAllSources, setShowAllSources] = useState(false);
 
   const analyzeClaim = async () => {
     const text = claim.trim();
@@ -40,6 +41,7 @@ const Analyze = () => {
     setApiResult(null);
     setSelectedLang('en');
     setError(null);
+    setShowAllSources(false);
 
     try {
       const result = await verifyNews(text);
@@ -237,6 +239,59 @@ const Analyze = () => {
                   </p>
                 </div>
               </div>
+
+              {/* Sources Used */}
+              {apiResult.sources && apiResult.sources.length > 0 && (
+                <div className="glass-card p-7 bg-secondary/50 transition-all duration-300 hover:bg-secondary/70 mt-5">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+                    Sources Used for Verification
+                  </h3>
+                  <ul className="space-y-2">
+                    {(showAllSources ? apiResult.sources : apiResult.sources.slice(0, 5)).map(
+                      (src: Source, idx: number) => (
+                        <li key={idx}>
+                          <a
+                            href={src.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-start gap-3 group rounded-lg p-2 -mx-2 hover:bg-muted/30 transition-colors duration-200"
+                          >
+                            <div className="flex-shrink-0 mt-0.5">
+                              {src.trusted ? (
+                                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                              ) : (
+                                <Globe className="w-4 h-4 text-muted-foreground/50" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-foreground/90 group-hover:text-primary transition-colors duration-200 leading-snug line-clamp-2">
+                                {src.title || src.source}
+                              </p>
+                              <p className="text-xs text-muted-foreground/60 mt-0.5 flex items-center gap-1">
+                                {src.source}
+                                {src.trusted && (
+                                  <span className="text-emerald-400 font-semibold"> · Trusted</span>
+                                )}
+                              </p>
+                            </div>
+                            <ExternalLink className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-primary flex-shrink-0 mt-1 transition-colors duration-200" />
+                          </a>
+                        </li>
+                      )
+                    )}
+                  </ul>
+                  {apiResult.sources.length > 5 && (
+                    <button
+                      onClick={() => setShowAllSources((v) => !v)}
+                      className="mt-4 text-xs text-primary hover:text-primary/80 font-medium transition-colors duration-200"
+                    >
+                      {showAllSources
+                        ? 'Show less'
+                        : `Show ${apiResult.sources.length - 5} more source${apiResult.sources.length - 5 > 1 ? 's' : ''}`}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Location Map */}
