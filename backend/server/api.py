@@ -8,9 +8,14 @@ from crew.crew import run_crew
 
 app = FastAPI(title="Fake News Verification API")
 
-# Read allowed origins from env; defaults to "*" (update CORS_ORIGINS in production)
+# Read allowed origins from env; defaults to "*"
 _cors_origins_raw = os.getenv("CORS_ORIGINS", "*")
 _cors_origins = [o.strip() for o in _cors_origins_raw.split(",")]
+
+# Always ensure the production frontend is allowed
+_PRODUCTION_ORIGIN = "https://truthcrew.vercel.app"
+if "*" not in _cors_origins and _PRODUCTION_ORIGIN not in _cors_origins:
+    _cors_origins.append(_PRODUCTION_ORIGIN)
 
 app.add_middleware(
     CORSMiddleware,
