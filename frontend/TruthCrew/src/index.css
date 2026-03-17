@@ -119,6 +119,28 @@
     @apply w-full bg-secondary border border-border rounded-xl px-6 py-4 text-foreground placeholder:text-muted-foreground;
     @apply focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all duration-200;
   }
+
+  /* Trending page status badges */
+  .status-badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide;
+  }
+
+  .badge-false {
+    @apply bg-red-500/20 text-red-400 border border-red-500/30;
+  }
+
+  .badge-misleading-orange {
+    @apply bg-orange-500/20 text-orange-400 border border-orange-500/30;
+  }
+
+  .badge-unverified-yellow {
+    @apply bg-yellow-500/20 text-yellow-400 border border-yellow-500/30;
+  }
+
+  .category-pill {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium;
+    @apply bg-primary/10 text-primary border border-primary/20;
+  }
 }
 
 @layer utilities {

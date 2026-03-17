@@ -12,3 +12,8 @@ SEARCH_API_KEY=your_serpapi_key_here
 # CORS (comma-separated origins)
 # ===============================
 CORS_ORIGINS=https://your-frontend.vercel.app
+
+# ===============================
+# MongoDB Atlas (for Trending Claims)
+# ===============================
+MONGO_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/truthcrew
