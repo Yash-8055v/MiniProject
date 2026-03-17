@@ -7,6 +7,7 @@ import Navigation from "./components/Navigation";
 import Index from "./pages/Index";
 import Analyze from "./pages/Analyze";
 import About from "./pages/About";
+import Trending from "./pages/Trending";
 import NotFound from "./pages/NotFound";
 
 const App = () => (
@@ -22,6 +23,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/analyze" element={<Analyze />} />
             <Route path="/about" element={<About />} />
+            <Route path="/trending" element={<Trending />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
