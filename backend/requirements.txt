@@ -394,10 +394,6 @@ python-multipart==0.0.22
     # via
     #   backend (pyproject.toml)
     #   mcp
-pywin32==311
-    # via
-    #   mcp
-    #   portalocker
 pyyaml==6.0.3
     # via
     #   chromadb
