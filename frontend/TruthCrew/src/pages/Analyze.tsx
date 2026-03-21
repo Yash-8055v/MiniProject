@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { Search, CheckCircle, XCircle, HelpCircle, Loader2, AlertTriangle, Gauge, ExternalLink, ShieldCheck, Globe } from 'lucide-react';
 import LanguageSelector from '../components/LanguageSelector';
-import IndiaMap from '../components/IndiaMap';
-import { verifyNews, type VerifyResponse, type Source } from '../services/api';
+import LeafletHeatmap from '../components/LeafletHeatmap';
+import type { HeatmapPoint } from '../components/LeafletHeatmap';
+import TopRegionsPanel from '../components/TopRegionsPanel';
+import HeatmapInsight from '../components/HeatmapInsight';
+import { verifyNews, fetchHeatmap, type VerifyResponse, type Source } from '../services/api';
 
 type VerdictType = 'likely_true' | 'likely_false' | 'likely_misleading' | 'unverified';
 type Language = 'en' | 'hi' | 'mr';
@@ -16,13 +19,6 @@ function mapVerdict(raw: string): VerdictType {
   return 'unverified';
 }
 
-/** Map internal type to IndiaMap variant */
-function toMapVariant(v: VerdictType): 'verified' | 'misleading' | 'unverified' {
-  if (v === 'likely_true') return 'verified';
-  if (v === 'likely_false' || v === 'likely_misleading') return 'misleading';
-  return 'unverified';
-}
-
 const Analyze = () => {
   const [claim, setClaim] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -31,6 +27,10 @@ const Analyze = () => {
   const [selectedLang, setSelectedLang] = useState<Language>('en');
   const [error, setError] = useState<string | null>(null);
   const [showAllSources, setShowAllSources] = useState(false);
+  const [heatmapData, setHeatmapData] = useState<Record<string, number> | null>(null);
+  const [isHeatmapLoading, setIsHeatmapLoading] = useState(false);
+  const [heatmapError, setHeatmapError] = useState(false);
+  const [selectedRegion, setSelectedRegion] = useState<HeatmapPoint | null>(null);
 
   const analyzeClaim = async () => {
     const text = claim.trim();
@@ -42,14 +42,25 @@ const Analyze = () => {
     setSelectedLang('en');
     setError(null);
     setShowAllSources(false);
+    setHeatmapData(null);
+    setIsHeatmapLoading(true);
+    setHeatmapError(false);
+    setSelectedRegion(null);
 
     try {
       const result = await verifyNews(text);
       setApiResult(result);
       setVerdict(mapVerdict(result.verdict));
+
+      // Fire heatmap fetch in parallel (non-blocking)
+      fetchHeatmap(text)
+        .then((data) => setHeatmapData(data))
+        .catch(() => setHeatmapError(true))
+        .finally(() => setIsHeatmapLoading(false));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
       setError(message);
+      setIsHeatmapLoading(false);
     } finally {
       setIsAnalyzing(false);
     }
@@ -294,13 +305,75 @@ const Analyze = () => {
               )}
             </div>
 
-            {/* Location Map */}
+            {/* ============================================================ */}
+            {/*  Rumor Spread Heatmap — Leaflet + OpenStreetMap               */}
+            {/* ============================================================ */}
             <div className="glass-card p-8 animate-fade-up" style={{ animationDelay: '0.3s' }}>
-              <h2 className="text-xl font-bold text-foreground text-center mb-6">
-                Where This Information Is Being Discussed More
+              <h2 className="text-xl font-bold text-foreground text-center mb-2">
+                Spread of this claim across India
               </h2>
-              <IndiaMap variant={toMapVariant(verdict)} />
+              <p className="text-center text-sm text-muted-foreground mb-6">
+                Regional search interest based on Google Trends
+              </p>
+
+              <div className={`grid gap-8 items-start ${
+                heatmapData && Object.keys(heatmapData).length > 0 ? 'lg:grid-cols-[1fr_320px]' : ''
+              }`}>
+                <LeafletHeatmap
+                  data={heatmapData}
+                  isLoading={isHeatmapLoading}
+                  claim={claim}
+                  onRegionClick={(region) => setSelectedRegion(region)}
+                />
+                {!isHeatmapLoading && heatmapData !== null && (
+                  <TopRegionsPanel
+                    query={claim}
+                    data={heatmapData}
+                    isLoading={isHeatmapLoading}
+                  />
+                )}
+                {isHeatmapLoading && (
+                  <TopRegionsPanel query={claim} data={{}} isLoading={true} />
+                )}
+              </div>
+
+              {/* AI Insight */}
+              {!isHeatmapLoading && heatmapData && Object.keys(heatmapData).length > 0 && (
+                <div className="mt-6">
+                  <HeatmapInsight query={claim} data={heatmapData} />
+                </div>
+              )}
             </div>
+
+            {/* Region detail popup */}
+            {selectedRegion && (
+              <div className="glass-card p-6 animate-fade-up border-primary/20 bg-primary/5">
+                <div className="flex items-start justify-between mb-3">
+                  <h3 className="text-lg font-bold text-foreground">{selectedRegion.name}</h3>
+                  <button
+                    onClick={() => setSelectedRegion(null)}
+                    className="text-muted-foreground hover:text-foreground transition-colors text-sm"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p>
+                    <span className="text-foreground font-medium">Claim:</span> "{claim}"
+                  </p>
+                  <p>
+                    <span className="text-foreground font-medium">Trend Score:</span>{' '}
+                    <span style={{ color: selectedRegion.value >= 70 ? '#ef4444' : selectedRegion.value >= 40 ? '#f97316' : '#94a3b8' }}>
+                      {selectedRegion.value}
+                    </span>
+                    {' '}({selectedRegion.value >= 70 ? 'High' : selectedRegion.value >= 40 ? 'Medium' : 'Low'} intensity)
+                  </p>
+                  <p className="text-muted-foreground/80 text-xs mt-3 italic">
+                    High scores indicate elevated search interest and potential viral spread in this region.
+                  </p>
+                </div>
+              </div>
+            )}
           </section>
         )}
 

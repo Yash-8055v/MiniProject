@@ -16,4 +16,5 @@ dependencies = [
     "feedparser>=6.0.11",
     "apscheduler>=3.11.0",
     "pymongo>=4.12.0",
+    "pytrends>=4.9.2",
 ]

@@ -15,6 +15,7 @@ load_dotenv()
 
 _client: Optional[MongoClient] = None
 _collection: Optional[Collection] = None
+_heatmap_collection: Optional[Collection] = None
 
 
 def get_collection() -> Collection:
@@ -39,6 +40,25 @@ def get_collection() -> Collection:
     _collection.create_index("created_at", expireAfterSeconds=7 * 24 * 3600)
 
     return _collection
+
+
+def get_heatmap_collection() -> Collection:
+    """Return the heatmap_cache collection, connecting if needed."""
+    global _client, _heatmap_collection
+
+    if _heatmap_collection is not None:
+        return _heatmap_collection
+
+    if _client is None:
+        get_collection()  # ensure connection
+
+    db = _client["truthcrew"]
+    _heatmap_collection = db["heatmap_cache"]
+
+    # TTL index: auto-delete cached heatmaps after 12 hours
+    _heatmap_collection.create_index("created_at", expireAfterSeconds=12 * 3600)
+
+    return _heatmap_collection
 
 
 def make_claim_hash(claim_text: str) -> str:
@@ -107,3 +127,29 @@ def close_connection() -> None:
         _client.close()
         _client = None
         _collection = None
+        _heatmap_collection = None
+
+
+def get_cached_heatmap(query_hash: str) -> Optional[dict]:
+    """Retrieve cached heatmap data if it exists."""
+    col = get_heatmap_collection()
+    doc = col.find_one({"query_hash": query_hash})
+    if doc:
+        return doc.get("data")
+    return None
+
+
+def set_cached_heatmap(query_hash: str, data: dict) -> None:
+    """Store heatmap data with current timestamp for TTL expiration."""
+    col = get_heatmap_collection()
+    col.update_one(
+        {"query_hash": query_hash},
+        {
+            "$set": {
+                "query_hash": query_hash,
+                "data": data,
+                "created_at": datetime.now(timezone.utc),
+            }
+        },
+        upsert=True,
+    )
