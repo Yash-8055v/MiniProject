@@ -2,6 +2,7 @@ import os
 import logging
 import asyncio
 import urllib.parse
+from datetime import datetime, timezone, timedelta
 from functools import partial
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Body
@@ -21,6 +22,7 @@ from database.db import (
     make_claim_hash,
     get_cached_analysis,
     set_cached_analysis,
+    get_last_refresh_time,
 )
 from trending.pipeline import run_refresh_pipeline
 from server.heatmap import get_google_trends_heatmap
@@ -60,16 +62,41 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"⚠️  MongoDB connection failed: {e} — trending features disabled")
 
-    # Start the 24-hour background scheduler
+    # Start the 6-hour background scheduler (reduced from 24h; catches up faster after spin-down)
     scheduler.add_job(
         scheduled_refresh,
         trigger="interval",
-        hours=24,
+        hours=6,
         id="trending_refresh",
         replace_existing=True,
     )
     scheduler.start()
-    logger.info("✅ APScheduler started — trending refresh every 24 hours")
+    logger.info("✅ APScheduler started — trending refresh every 6 hours")
+
+    # ── Startup stale-data check ─────────────────────────────────────────────
+    # On every cold-start, check if the pipeline ran recently.
+    # Free servers (Render) restart often; APScheduler resets, so this ensures
+    # we always have fresh data even after a long spin-down period.
+    def _startup_refresh_if_stale():
+        try:
+            last = get_last_refresh_time()
+            stale_threshold = timedelta(hours=6)
+            is_stale = (last is None) or (
+                datetime.now(timezone.utc) - last > stale_threshold
+            )
+            if is_stale:
+                age_str = "never" if last is None else f"{int((datetime.now(timezone.utc) - last).total_seconds() / 3600)}h ago"
+                logger.info(f"🔄 Startup: data is stale (last refresh: {age_str}), triggering immediate refresh...")
+                run_refresh_pipeline()
+            else:
+                age_min = int((datetime.now(timezone.utc) - last).total_seconds() / 60)
+                logger.info(f"✅ Startup: trending data is fresh (last refresh {age_min} minutes ago), skipping.")
+        except Exception as e:
+            logger.error(f"⚠️  Startup stale-check failed: {e}")
+
+    import threading
+    threading.Thread(target=_startup_refresh_if_stale, daemon=True, name="startup-refresh").start()
+    logger.info("✅ Startup stale-data check launched in background thread")
 
     # ---------------------------------------------------------------------------
     # Start Telegram Bot (polling) — only if token is configured
@@ -392,3 +419,22 @@ async def heatmap_insight(body: HeatmapInsightRequest):
         logger.error(f"Heatmap insight generation failed: {e}")
         return {"insight": ""}
 
+
+
+# ---------------------------------------------------------------------------
+# Health check endpoint - for UptimeRobot keep-alive pings
+# ---------------------------------------------------------------------------
+@app.get("/health")
+async def health_check():
+    """
+    Lightweight liveness probe. UptimeRobot (or any external monitor) should
+    ping this every 5 minutes to prevent the free Render server from spinning down.
+    Returns the timestamp of the last successful trending refresh as a bonus.
+    """
+    last = get_last_refresh_time()
+    last_str = last.isoformat() if last else "never"
+    return {
+        "status": "ok",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "last_trending_refresh": last_str,
+    }

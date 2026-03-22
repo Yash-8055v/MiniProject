@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from trending.rss_fetcher import fetch_articles
 from trending.filter import filter_suspicious
 from trending.groq_analyzer import analyze_article
-from database.db import upsert_claim
+from database.db import upsert_claim, set_last_refresh_time
 
 logger = logging.getLogger(__name__)
 
@@ -102,5 +102,9 @@ def run_refresh_pipeline() -> dict:
         f"Pipeline complete in {duration_s:.1f}s - "
         f"{stored_count} stored, {skipped_count} skipped, {error_count} errors"
     )
+
+    # Persist refresh timestamp in MongoDB so startup check survives restarts
+    set_last_refresh_time()
+    logger.info("✅ Last refresh time saved to MongoDB")
 
     return summary

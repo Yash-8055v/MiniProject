@@ -17,6 +17,7 @@ _client: Optional[MongoClient] = None
 _collection: Optional[Collection] = None
 _heatmap_collection: Optional[Collection] = None
 _analysis_cache_collection: Optional[Collection] = None
+_pipeline_state_collection: Optional[Collection] = None
 
 
 def get_collection() -> Collection:
@@ -169,6 +170,46 @@ def set_cached_analysis(claim_hash: str, data: dict) -> None:
         )
     except Exception:
         pass  # Cache write failure is non-fatal
+
+
+def get_pipeline_state_collection() -> Collection:
+    """Return the pipeline_state collection (tracks last refresh time)."""
+    global _client, _pipeline_state_collection
+
+    if _pipeline_state_collection is not None:
+        return _pipeline_state_collection
+
+    if _client is None:
+        get_collection()  # ensure connection
+
+    db = _client["truthcrew"]
+    _pipeline_state_collection = db["pipeline_state"]
+    return _pipeline_state_collection
+
+
+def get_last_refresh_time() -> Optional[datetime]:
+    """Return the UTC datetime of the last successful trending refresh, or None."""
+    try:
+        col = get_pipeline_state_collection()
+        doc = col.find_one({"_id": "trending_refresh"})
+        if doc and "last_refreshed_at" in doc:
+            return doc["last_refreshed_at"]
+    except Exception:
+        pass
+    return None
+
+
+def set_last_refresh_time() -> None:
+    """Persist the current UTC time as the last successful trending refresh."""
+    try:
+        col = get_pipeline_state_collection()
+        col.update_one(
+            {"_id": "trending_refresh"},
+            {"$set": {"last_refreshed_at": datetime.now(timezone.utc)}},
+            upsert=True,
+        )
+    except Exception:
+        pass  # Non-fatal
 
 
 def close_connection() -> None:
