@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Search, CheckCircle, XCircle, HelpCircle, Loader2, AlertTriangle, Gauge, ExternalLink, ShieldCheck, Globe } from 'lucide-react';
 import LanguageSelector from '../components/LanguageSelector';
 import LeafletHeatmap from '../components/LeafletHeatmap';
@@ -20,7 +21,10 @@ function mapVerdict(raw: string): VerdictType {
 }
 
 const Analyze = () => {
-  const [claim, setClaim] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialQuery = searchParams.get('q') || '';
+
+  const [claim, setClaim] = useState(initialQuery);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [verdict, setVerdict] = useState<VerdictType | null>(null);
   const [apiResult, setApiResult] = useState<VerifyResponse | null>(null);
@@ -35,6 +39,9 @@ const Analyze = () => {
   const analyzeClaim = async () => {
     const text = claim.trim();
     if (!text) return;
+
+    // Update URL to match current search
+    setSearchParams({ q: text });
 
     setIsAnalyzing(true);
     setVerdict(null);
@@ -65,6 +72,14 @@ const Analyze = () => {
       setIsAnalyzing(false);
     }
   };
+
+  // Automatically trigger analysis on mount if a query parameter was provided
+  useEffect(() => {
+    if (initialQuery) {
+      analyzeClaim();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const getExplanation = (lang: Language): string => {
     if (!apiResult) return '';

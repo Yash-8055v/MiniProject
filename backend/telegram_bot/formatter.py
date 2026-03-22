@@ -30,6 +30,11 @@ def _escape(text: str) -> str:
     special = r"\_*[]()~`>#+-=|{}.!"
     return "".join(f"\\{c}" if c in special else c for c in str(text))
 
+def _escape_url(url: str) -> str:
+    """Escape URLs for Telegram MarkdownV2 inline links."""
+    # Inside the (url) part of [text](url), only ) and \ need escaping
+    return str(url).replace("\\", "\\\\").replace(")", "\\)")
+
 
 def format_analysis(
     data: dict,
@@ -70,11 +75,20 @@ def format_analysis(
     if len(explanation) > 350:
         explanation = explanation[:347] + "..."
 
-    icon = _verdict_icon(verdict)
-    regions_text = (
-        ", ".join(top_regions) if top_regions else "No regional data available"
-    )
+    # ── Sources ──
+    # Assuming sources is a list of dicts with 'title' and 'url'
+    sources = data.get("sources", [])
+    sources_text = ""
+    if sources:
+        sources_text = "\n\n".join(
+            f"• [{_escape(s.get('title', 'Source'))}]({_escape_url(s.get('url', ''))})"
+            for s in sources[:3] # Show max 3 sources to avoid huge messages
+        )
+    else:
+        sources_text = "_No direct sources provided_"
 
+    icon = _verdict_icon(verdict)
+    
     lines = [
         "🚨 *Claim Analysis*",
         "",
@@ -86,8 +100,8 @@ def format_analysis(
         "*Explanation:*",
         _escape(explanation),
         "",
-        "🌍 *Geographic Spread:*",
-        f"Top regions: {_escape(regions_text)}",
+        "📰 *Sources:*",
+        sources_text,
     ]
 
     text = "\n".join(lines)
@@ -109,22 +123,45 @@ def format_analysis(
     return text, keyboard
 
 
-def format_trending(claims: list[dict], website_url: str) -> str:
+def format_trending(claims: list[dict], website_url: str) -> tuple[str, InlineKeyboardMarkup]:
     if not claims:
-        return "No trending claims found right now\\. Check back later\\!"
+        # Return an empty keyboard if no claims
+        return "No trending claims found right now\\. Check back later\\!", InlineKeyboardMarkup([])
 
     lines = ["🔥 *Trending Misinformation*", ""]
 
     for i, claim in enumerate(claims[:5], start=1):
         claim_text = claim.get("claim", "Unknown claim")
         region = claim.get("region", "global").capitalize()
+        source_name = claim.get("source_name", "Source")
+        source_url = claim.get("source_url")
+        
+        # Determine fallback analysis link
+        url = source_url or f"{website_url.rstrip('/')}/analyze?q={urllib.parse.quote(claim_text)}"
+        
         if len(claim_text) > 80:
             claim_text = claim_text[:77] + "..."
-        lines.append(f"{i}\\. {_escape(claim_text)} \\({_escape(region)}\\)")
+            
+        # Plain text claim
+        lines.append(f"{i}\\. {_escape(claim_text)}")
+        
+        # Sub-bullet with region
+        lines.append(f"   📍 {_escape(region)}")
+        
+        # Sub-bullet with link
+        if source_url and source_name and source_name.lower() != "unknown":
+            lines.append(f"   🔗 [{_escape(source_name)}]({_escape_url(source_url)})")
+        else:
+            lines.append(f"   🔗 [View Analysis]({_escape_url(url)})")
+            
+        lines.append("") # Blank line for spacing
 
     trending_url = f"{website_url.rstrip('/')}/trending"
-    lines += ["", f"🔗 [View all trending claims]({trending_url})"]
-    return "\n".join(lines)
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔗 View all trending claims", url=trending_url)]
+    ])
+    
+    return "\n".join(lines), keyboard
 
 
 def format_welcome() -> str:

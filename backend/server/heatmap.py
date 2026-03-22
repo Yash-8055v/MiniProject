@@ -6,6 +6,21 @@ Falls back to deterministic simulated data when Trends is unavailable.
 
 import hashlib
 import logging
+import urllib3
+
+# ── Compatibility shim ─────────────────────────────────────────────────────
+# pytrends passes `method_whitelist` to urllib3.Retry, which was renamed to
+# `allowed_methods` in urllib3 ≥ 1.26. Patch it in before TrendReq is used.
+_original_retry_init = urllib3.util.retry.Retry.__init__
+
+def _patched_retry_init(self, *args, **kwargs):
+    if "method_whitelist" in kwargs and "allowed_methods" not in kwargs:
+        kwargs["allowed_methods"] = kwargs.pop("method_whitelist")
+    _original_retry_init(self, *args, **kwargs)
+
+urllib3.util.retry.Retry.__init__ = _patched_retry_init
+# ───────────────────────────────────────────────────────────────────────────
+
 from pytrends.request import TrendReq
 from pytrends.exceptions import TooManyRequestsError
 
@@ -13,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Reusable pytrends session
 _pytrends = TrendReq(hl="en-IN", tz=330, timeout=(10, 25), retries=2, backoff_factor=1)
+
 
 # Major Indian states for fallback generation
 _STATES = [

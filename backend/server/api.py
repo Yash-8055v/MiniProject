@@ -77,14 +77,16 @@ async def lifespan(app: FastAPI):
     _bot_app = None
     if os.getenv("TELEGRAM_BOT_TOKEN"):
         try:
-            from telegram_bot.bot import build_application, BOT_COMMANDS
+            from telegram_bot.bot import build_application, BOT_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION
             _bot_app = build_application()
             await _bot_app.initialize()
-            # post_init only fires via run_polling() — call it manually here
+            # post_init only fires via run_polling() — call Telegram API manually here
             await _bot_app.bot.set_my_commands(BOT_COMMANDS)
+            await _bot_app.bot.set_my_description(BOT_DESCRIPTION)
+            await _bot_app.bot.set_my_short_description(BOT_SHORT_DESCRIPTION)
             await _bot_app.start()
             await _bot_app.updater.start_polling(drop_pending_updates=True)
-            logger.info("✅ Telegram bot started in polling mode (menu commands registered)")
+            logger.info("✅ Telegram bot started (commands + description registered)")
         except Exception as e:
             logger.warning(f"⚠️  Telegram bot failed to start: {e}")
             _bot_app = None
@@ -236,6 +238,7 @@ async def analyze_claim(body: AnalyzeClaimRequest):
         "explanation": crew_result.get("english", ""),
         "explanation_hi": crew_result.get("hindi", ""),
         "explanation_mr": crew_result.get("marathi", ""),
+        "sources": crew_result.get("sources", []),
         "top_regions": top_regions,
         "url": full_url,
     }

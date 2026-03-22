@@ -8,7 +8,7 @@ import asyncio
 import logging
 from functools import partial
 
-from telegram import Update
+from telegram import Update, ForceReply
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode, ChatAction
 
@@ -72,6 +72,7 @@ async def _analyze_claim(claim: str) -> dict:
         "explanation": crew_result.get("english", ""),
         "explanation_hi": crew_result.get("hindi", ""),
         "explanation_mr": crew_result.get("marathi", ""),
+        "sources": crew_result.get("sources", []),
         "top_regions": top_regions,
         "url": full_url,
     }
@@ -130,9 +131,10 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     claim = " ".join(context.args).strip() if context.args else ""
     if not claim:
         await update.message.reply_text(
-            "⚠️ Please provide a claim after the command\\.\n\n"
-            "Example: `/check 5G causes cancer`",
+            "⚠️ Please reply to this message with the claim you want to check\\.\n\n"
+            "Or just type any claim directly in the chat\\!",
             parse_mode=ParseMode.MARKDOWN_V2,
+            reply_markup=ForceReply(selective=True)
         )
         return
 
@@ -152,8 +154,7 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         logger.error(f"Claim analysis failed for '{claim}': {e}")
         await processing_msg.edit_text(
-            "❌ Unable to analyse the claim right now\\. Please try again later\\.",
-            parse_mode=ParseMode.MARKDOWN_V2,
+            f"❌ Unable to analyse the claim right now.\n\nDeveloper error info: {e}"
         )
 
 
@@ -173,8 +174,12 @@ async def trending(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     website_url = os.getenv("WEBSITE_URL", "https://truthcrew.vercel.app")
-    text = fmt.format_trending(claims, website_url)
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
+    text, keyboard = fmt.format_trending(claims, website_url)
+    await update.message.reply_text(
+        text, 
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=keyboard
+    )
 
 
 # ── Natural language / plain text ────────────────────────────────────────────
@@ -183,6 +188,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_id = update.effective_user.id
     text = update.message.text.strip()
     if not text:
+        return
+
+    # Restrict random texts: only process if it's a direct reply to the bot's ForceReply prompt
+    is_reply_to_bot = (
+        update.message.reply_to_message and 
+        update.message.reply_to_message.from_user.id == context.bot.id
+    )
+    
+    if not is_reply_to_bot:
+        await update.message.reply_text(
+            "👋 Hi\\! To verify a news claim, please use the `/check` command from the menu\\.",
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
         return
 
     if not rate_limiter.is_allowed(user_id):

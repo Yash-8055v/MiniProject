@@ -1,7 +1,7 @@
 """
 TruthCrew Telegram bot — application builder.
 
-Registers all handlers and sets the persistent Menu button via post_init.
+Registers all handlers, menu commands, and bot description via post_init.
 Integrated into FastAPI lifespan (server/api.py) for single-process startup.
 """
 
@@ -33,18 +33,27 @@ logger = logging.getLogger(__name__)
 
 # ── Bot commands shown in the Telegram Menu button ───────────────────────────
 BOT_COMMANDS = [
-    BotCommand("start",    "👋 Welcome & usage"),
     BotCommand("check",    "🔍 Analyse a claim"),
     BotCommand("trending", "🔥 Top trending misinformation"),
     BotCommand("language", "🌐 Change response language"),
     BotCommand("help",     "📖 Show all commands"),
+    BotCommand("start",    "👋 Welcome & usage"),
 ]
 
+BOT_DESCRIPTION = (
+    "TruthCrew is your AI-powered misinformation detector. "
+    "Send any claim or news headline and I'll fact-check it instantly using "
+    "trusted sources and AI analysis.\n\n"
+    "✅ Verify claims in seconds\n"
+    "🔥 See trending misinformation\n"
+    "🌍 Know which regions are most affected\n"
+    "📰 View actual sources used for verification\n"
+    "🌐 Responses in English, Hindi & Marathi"
+)
 
-async def _post_init(application: Application) -> None:
-    """Called after the bot is initialised — registers menu commands."""
-    await application.bot.set_my_commands(BOT_COMMANDS)
-    logger.info("✅ Bot menu commands registered")
+BOT_SHORT_DESCRIPTION = (
+    "AI-powered fact-checker — verify claims, spot misinformation, see sources."
+)
 
 
 def build_application() -> Application:
@@ -59,12 +68,7 @@ def build_application() -> Application:
             "Add it to your .env file and restart the server."
         )
 
-    app = (
-        Application.builder()
-        .token(token)
-        .post_init(_post_init)
-        .build()
-    )
+    app = Application.builder().token(token).build()
 
     # ── Command handlers ──
     app.add_handler(CommandHandler("start",    start))
