@@ -1,4 +1,4 @@
-# 🛡️ TruthCrew
+# TruthCrew
 
 **Awareness before amplification.**
 
@@ -11,7 +11,7 @@ situations.
 
 ---
 
-# 🚀 Overview
+#  Overview
 
 In today's fast-moving digital world, misinformation spreads faster than
 verified facts. During emergencies or viral moments, unverified news and
@@ -32,9 +32,9 @@ information online**.
 
 ---
 
-# ✨ Key Features
+#  Key Features
 
-## 🔍 News Claim Analysis
+## News Claim Analysis
 
 Users can enter a **news headline or viral message** and receive one of
 three assistive outcomes:
@@ -52,7 +52,7 @@ Each outcome includes:
 
 ---
 
-## 🌐 Multi‑Language Support
+##  Multi‑Language Support
 
 TruthCrew supports multiple languages for better accessibility:
 
@@ -65,7 +65,7 @@ clean and focused.
 
 ---
 
-## 🖼️ Image Analysis (AI‑Generated Content Awareness)
+## Image Analysis (AI‑Generated Content Awareness)
 
 Users can upload an image to understand whether it **may be
 AI‑generated**.
@@ -79,7 +79,7 @@ The system:
 
 ---
 
-## 🗺️ Misinformation Spread Visualization
+##  Misinformation Spread Visualization
 
 Interactive **India map visualizations** demonstrate how misinformation
 spreads geographically.
@@ -93,7 +93,7 @@ regions**.
 
 ---
 
-# 🧠 Role of AI
+#  Role of AI
 
 AI is used in an **assistive and explainable manner**, not as an
 authority.
@@ -108,7 +108,7 @@ AI is used to **assist awareness**, not to make final truth judgments.
 
 ---
 
-# 🛠️ Tech Stack
+#  Tech Stack
 
 Component Technology
 
@@ -121,7 +121,7 @@ Logic Deterministic AI‑assisted mock workflows
 
 ---
 
-# 🤖 AI Tools Used
+#  AI Tools Used
 
 **ChatGPT** - AI‑assisted system design\
 
@@ -137,31 +137,18 @@ logic and explanation workflows
 These tools were used **for awareness and explainability**, not
 automated truth determination.
 
----
+-
 
-# 👥 Team Members
+# Live Deployment
 
-**Yash Karande**\
-Frontend Development, System Logic
+ **Live Demo:** Coming Soon
 
-**Madhusudan Chanda**\
-Frontend Development, Research
-
-**Aarchii Dobaria**\
-UI/UX Design, Documentation
-
----
-
-# 🔗 Live Deployment
-
-👉 **Live Demo:** Coming Soon
-
-👉 **Source Code:**\
+**Source Code:**\
 https://github.com/Yash-8055v/MiniProject
 
 ---
 
-# 🧪 Disclaimer
+# Disclaimer
 
 All verification logic, search activity, image analysis, and geographic
 visualizations are **demonstrative**, used solely for **awareness and
@@ -174,7 +161,7 @@ Users should always verify information using trusted sources.
 
 ---
 
-# 🏁 Conclusion
+#  Conclusion
 
 TruthCrew demonstrates how **frontend development combined with
 responsible AI concepts** can address the challenge of misinformation.
@@ -191,6 +178,6 @@ for misinformation awareness**.
 
 ---
 
-# 📌 Tagline
+#  Tagline
 
 **"In the right moment, the right information can save lives."**
