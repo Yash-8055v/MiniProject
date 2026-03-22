@@ -59,7 +59,7 @@ httpx==0.28.1
 httpx-sse==0.4.3
 identify==2.6.16
     # via mcp
-huggingface-hub==1.7.2
+huggingface-hub==0.36.2
     # via tokenizers
 idna==3.11
 importlib-metadata==8.7.1
