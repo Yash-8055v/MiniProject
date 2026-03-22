@@ -422,13 +422,14 @@ async def heatmap_insight(body: HeatmapInsightRequest):
 
 
 # ---------------------------------------------------------------------------
-# Health check endpoint - for UptimeRobot keep-alive pings
+# Health check endpoint - pinged by GitHub Actions cron job every 5 minutes
 # ---------------------------------------------------------------------------
 @app.get("/health")
 async def health_check():
     """
-    Lightweight liveness probe. UptimeRobot (or any external monitor) should
-    ping this every 5 minutes to prevent the free Render server from spinning down.
+    Lightweight liveness probe. Pinged by the GitHub Actions cron job
+    (.github/workflows/keep_alive.yml) every 5 minutes to prevent the free
+    Render server from spinning down.
     Returns the timestamp of the last successful trending refresh as a bonus.
     """
     last = get_last_refresh_time()
