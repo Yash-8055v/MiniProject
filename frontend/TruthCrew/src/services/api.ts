@@ -45,3 +45,42 @@ export async function verifyNews(text: string): Promise<VerifyResponse> {
 
   return json.data;
 }
+
+export async function fetchHeatmap(query: string): Promise<Record<string, number>> {
+  const url = new URL(`${API_URL}/api/heatmap`);
+  url.searchParams.append("query", query);
+
+  const response = await fetch(url.toString());
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    const message = errorData?.detail || `Server error (${response.status})`;
+    throw new Error(message);
+  }
+
+  const json = await response.json();
+  if (json.status !== "success" || !json.data) {
+    throw new Error("Unexpected response from server");
+  }
+
+  return json.data;
+}
+
+export async function fetchHeatmapInsight(
+  query: string,
+  heatmapData: Record<string, number>
+): Promise<string> {
+  const response = await fetch(`${API_URL}/api/heatmap-insight`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, heatmap_data: heatmapData }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Insight API error (${response.status})`);
+  }
+
+  const json = await response.json();
+  return json.insight || "";
+}
+

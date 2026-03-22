@@ -217,6 +217,8 @@ linkify-it-py==2.1.0
     # via markdown-it-py
 litellm==1.82.4
     # via crewai
+lxml==6.0.2
+    # via pytrends
 markdown-it-py==4.0.0
     # via
     #   mdit-py-plugins
@@ -243,6 +245,7 @@ numpy==2.4.3
     #   chromadb
     #   lancedb
     #   onnxruntime
+    #   pandas
 oauthlib==3.3.1
     # via requests-oauthlib
 onnxruntime==1.24.4
@@ -296,6 +299,8 @@ packaging==26.0
     #   huggingface-hub
     #   lancedb
     #   onnxruntime
+pandas==3.0.1
+    # via pytrends
 pdfminer-six==20251230
     # via pdfplumber
 pdfplumber==0.11.9
@@ -382,6 +387,7 @@ python-dateutil==2.9.0.post0
     # via
     #   kubernetes
     #   lance-namespace-urllib3-client
+    #   pandas
     #   posthog
 python-dotenv==1.1.1
     # via
@@ -394,6 +400,12 @@ python-multipart==0.0.22
     # via
     #   backend (pyproject.toml)
     #   mcp
+pytrends==4.9.2
+    # via backend (pyproject.toml)
+pywin32==311
+    # via
+    #   mcp
+    #   portalocker
 pyyaml==6.0.3
     # via
     #   chromadb
@@ -418,6 +430,7 @@ requests==2.32.5
     #   kubernetes
     #   opentelemetry-exporter-otlp-proto-http
     #   posthog
+    #   pytrends
     #   requests-oauthlib
     #   tiktoken
 requests-oauthlib==2.0.0
@@ -516,7 +529,9 @@ typing-inspection==0.4.2
     #   pydantic
     #   pydantic-settings
 tzdata==2025.3
-    # via tzlocal
+    # via
+    #   pandas
+    #   tzlocal
 tzlocal==5.3.1
     # via apscheduler
 uc-micro-py==2.0.0
