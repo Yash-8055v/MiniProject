@@ -16,6 +16,7 @@ load_dotenv()
 _client: Optional[MongoClient] = None
 _collection: Optional[Collection] = None
 _heatmap_collection: Optional[Collection] = None
+_analysis_cache_collection: Optional[Collection] = None
 
 
 def get_collection() -> Collection:
@@ -118,6 +119,56 @@ def get_trending_claims(region: Optional[str] = None, limit: int = 10) -> list[d
         results.append(doc)
 
     return results
+
+
+def get_analysis_cache_collection() -> Collection:
+    """Return the analysis_cache collection, connecting if needed."""
+    global _client, _analysis_cache_collection
+
+    if _analysis_cache_collection is not None:
+        return _analysis_cache_collection
+
+    if _client is None:
+        get_collection()  # ensure connection
+
+    db = _client["truthcrew"]
+    _analysis_cache_collection = db["analysis_cache"]
+
+    # TTL index: auto-delete cached analyses after 24 hours
+    _analysis_cache_collection.create_index("created_at", expireAfterSeconds=24 * 3600)
+
+    return _analysis_cache_collection
+
+
+def get_cached_analysis(claim_hash: str) -> Optional[dict]:
+    """Retrieve cached claim analysis if it exists."""
+    try:
+        col = get_analysis_cache_collection()
+        doc = col.find_one({"claim_hash": claim_hash})
+        if doc:
+            return doc.get("data")
+    except Exception:
+        pass
+    return None
+
+
+def set_cached_analysis(claim_hash: str, data: dict) -> None:
+    """Store claim analysis with current timestamp for TTL expiration."""
+    try:
+        col = get_analysis_cache_collection()
+        col.update_one(
+            {"claim_hash": claim_hash},
+            {
+                "$set": {
+                    "claim_hash": claim_hash,
+                    "data": data,
+                    "created_at": datetime.now(timezone.utc),
+                }
+            },
+            upsert=True,
+        )
+    except Exception:
+        pass  # Cache write failure is non-fatal
 
 
 def close_connection() -> None:

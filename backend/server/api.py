@@ -1,5 +1,8 @@
 import os
 import logging
+import asyncio
+import urllib.parse
+from functools import partial
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +13,15 @@ from typing import Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from crew.crew import run_crew
-from database.db import get_collection, get_trending_claims, get_cached_heatmap, set_cached_heatmap
+from database.db import (
+    get_collection,
+    get_trending_claims,
+    get_cached_heatmap,
+    set_cached_heatmap,
+    make_claim_hash,
+    get_cached_analysis,
+    set_cached_analysis,
+)
 from trending.pipeline import run_refresh_pipeline
 from server.heatmap import get_google_trends_heatmap
 import hashlib
@@ -60,9 +71,39 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     logger.info("✅ APScheduler started — trending refresh every 24 hours")
 
+    # ---------------------------------------------------------------------------
+    # Start Telegram Bot (polling) — only if token is configured
+    # ---------------------------------------------------------------------------
+    _bot_app = None
+    if os.getenv("TELEGRAM_BOT_TOKEN"):
+        try:
+            from telegram_bot.bot import build_application, BOT_COMMANDS
+            _bot_app = build_application()
+            await _bot_app.initialize()
+            # post_init only fires via run_polling() — call it manually here
+            await _bot_app.bot.set_my_commands(BOT_COMMANDS)
+            await _bot_app.start()
+            await _bot_app.updater.start_polling(drop_pending_updates=True)
+            logger.info("✅ Telegram bot started in polling mode (menu commands registered)")
+        except Exception as e:
+            logger.warning(f"⚠️  Telegram bot failed to start: {e}")
+            _bot_app = None
+    else:
+        logger.info("ℹ️  TELEGRAM_BOT_TOKEN not set — bot disabled")
+
     yield
 
-    # Shutdown
+    # Shutdown Telegram Bot
+    if _bot_app is not None:
+        try:
+            await _bot_app.updater.stop()
+            await _bot_app.stop()
+            await _bot_app.shutdown()
+            logger.info("🛑 Telegram bot stopped")
+        except Exception as e:
+            logger.error(f"Error stopping Telegram bot: {e}")
+
+    # Shutdown APScheduler
     scheduler.shutdown(wait=False)
     logger.info("🛑 APScheduler stopped")
 
@@ -133,6 +174,76 @@ async def verify_news(
         "languages": ["en", "hi", "mr"],
         "data": result,
     }
+
+
+# ---------------------------------------------------------------------------
+# New: Bot-friendly claim analysis endpoint with caching
+# ---------------------------------------------------------------------------
+class AnalyzeClaimRequest(BaseModel):
+    query: str
+
+
+@app.post("/api/analyze-claim")
+async def analyze_claim(body: AnalyzeClaimRequest):
+    """
+    Bot-friendly claim analysis endpoint.
+    Accepts { "query": "..." } and returns a structured result.
+    Results are cached in MongoDB for 24 hours to minimise Groq API usage.
+    """
+    claim = body.query.strip()
+    if not claim:
+        raise HTTPException(status_code=400, detail="query must not be empty")
+
+    website_url = os.getenv("WEBSITE_URL", "https://truthcrew.vercel.app").rstrip("/")
+    encoded_claim = urllib.parse.quote(claim)
+    full_url = f"{website_url}/analyze?q={encoded_claim}"
+
+    # ── Cache check ──
+    claim_hash = make_claim_hash(claim)
+    cached = get_cached_analysis(claim_hash)
+    if cached is not None:
+        logger.info(f"🔥 Analysis cache HIT for: {claim[:60]}")
+        cached["url"] = full_url  # always refresh URL in case WEBSITE_URL changed
+        return {"status": "success", "cached": True, "data": cached}
+
+    # ── Run crew pipeline (blocking → executor) ──
+    logger.info(f"🔍 Analysis cache MISS — running crew for: {claim[:60]}")
+    try:
+        loop = asyncio.get_event_loop()
+        crew_result = await loop.run_in_executor(
+            None,
+            partial(run_crew, {"text": claim, "image_provided": False}),
+        )
+    except Exception as e:
+        logger.error(f"Crew pipeline failed: {e}")
+        raise HTTPException(status_code=500, detail="Analysis pipeline failed")
+
+    # ── Fetch top regions from heatmap (cached separately) ──
+    try:
+        loop = asyncio.get_event_loop()
+        heatmap = await loop.run_in_executor(
+            None, partial(get_google_trends_heatmap, claim)
+        )
+        sorted_regions = sorted(heatmap.items(), key=lambda x: x[1], reverse=True)
+        top_regions = [r for r, _ in sorted_regions[:5] if _ > 0]
+    except Exception:
+        top_regions = []
+
+    data = {
+        "claim": claim,
+        "verdict": crew_result.get("verdict", "Unknown"),
+        "confidence": crew_result.get("confidence", 0),
+        "explanation": crew_result.get("english", ""),
+        "explanation_hi": crew_result.get("hindi", ""),
+        "explanation_mr": crew_result.get("marathi", ""),
+        "top_regions": top_regions,
+        "url": full_url,
+    }
+
+    # ── Save to cache ──
+    set_cached_analysis(claim_hash, data)
+
+    return {"status": "success", "cached": False, "data": data}
 
 
 # ---------------------------------------------------------------------------
