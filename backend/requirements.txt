@@ -78,7 +78,7 @@ lance-namespace-urllib3-client==0.6.1
 lancedb==0.30.0
 linkify-it-py==2.1.0
     # via markdown-it-py
-litellm==1.82.6
+litellm==1.74.15.post2
     # via crewai
 lxml==6.0.2
 markdown-it-py==4.0.0
