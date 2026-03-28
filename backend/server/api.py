@@ -81,6 +81,9 @@ async def lifespan(app: FastAPI):
     def _startup_refresh_if_stale():
         try:
             last = get_last_refresh_time()
+            if last and last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+                
             stale_threshold = timedelta(hours=6)
             is_stale = (last is None) or (
                 datetime.now(timezone.utc) - last > stale_threshold
@@ -437,6 +440,8 @@ async def health_check():
     Returns the timestamp of the last successful trending refresh as a bonus.
     """
     last = get_last_refresh_time()
+    if last and last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
     last_str = last.isoformat() if last else "never"
     return {
         "status": "ok",

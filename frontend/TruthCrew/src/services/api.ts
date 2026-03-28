@@ -120,3 +120,25 @@ export async function detectImage(image: File): Promise<DetectImageResponse> {
   return json;
 }
 
+export async function detectVideo(video: File): Promise<DetectImageResponse> {
+  const formData = new FormData();
+  formData.append("video", video);
+
+  const response = await fetch(`${API_URL}/api/detect-video`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    const message = errorData?.detail || `Server error (${response.status})`;
+    throw new Error(message);
+  }
+
+  const json = await response.json();
+  if (json.status !== "success") {
+    throw new Error("Unexpected response from server");
+  }
+
+  return json;
+}
