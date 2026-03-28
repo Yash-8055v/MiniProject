@@ -173,20 +173,6 @@ const Analyze = () => {
           </div>
         </section>
 
-        {/* Image Analysis — Coming Soon */}
-        <section className="mb-12 animate-fade-up" style={{ animationDelay: '0.15s' }}>
-          <div className="glass-card p-8 opacity-60">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-foreground">Image Analysis</h2>
-                <p className="text-sm text-muted-foreground">Coming soon — Image verification will be available in a future update.</p>
-              </div>
-            </div>
-          </div>
-        </section>
 
         {/* Error State */}
         {error && (

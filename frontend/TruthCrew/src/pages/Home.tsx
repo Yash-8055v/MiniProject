@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight, Shield, AlertTriangle, Users } from 'lucide-react';
-import IndiaMap from '../components/IndiaMap';
+import LeafletHeatmap from '../components/LeafletHeatmap';
 
 const Home = () => {
   return (
@@ -99,8 +99,27 @@ const Home = () => {
             </p>
           </div>
 
-          <div className="glass-card p-8">
-            <IndiaMap variant="overview" />
+          <div className="glass-card p-0 overflow-hidden ring-1 ring-white/10 shadow-2xl">
+            <div className="h-[500px] w-full relative">
+              <LeafletHeatmap 
+                data={{
+                  "delhi": 95,
+                  "maharashtra": 88,
+                  "west bengal": 72,
+                  "karnataka": 78,
+                  "kerala": 65,
+                  "tamil nadu": 62,
+                  "uttar pradesh": 58,
+                  "gujarat": 50,
+                  "rajasthan": 52,
+                  "bihar": 45,
+                  "telangana": 68,
+                  "punjab": 42
+                }}
+                isLoading={false}
+                claim="General Misinformation Trends"
+              />
+            </div>
           </div>
         </section>
       </div>

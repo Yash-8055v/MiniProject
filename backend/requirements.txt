@@ -92,6 +92,7 @@ multidict==6.7.1
 nodeenv==1.10.0
 numpy==2.4.2
 oauthlib==3.3.1
+opencv-python-headless==4.11.0.86
 onnxruntime==1.24.1
 openai==1.83.0
 openpyxl==3.1.5

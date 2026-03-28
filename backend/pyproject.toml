@@ -19,4 +19,5 @@ dependencies = [
     "pytrends>=4.9.2",
     "python-telegram-bot>=21.0",
     "huggingface-hub>=0.36.2",
+    "opencv-python-headless>=4.11.0",
 ]

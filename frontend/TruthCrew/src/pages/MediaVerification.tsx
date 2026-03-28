@@ -1,9 +1,9 @@
 import { useState, useRef } from "react";
-import { UploadCloud, Image as ImageIcon, AlertTriangle, CheckCircle, Loader2, Info } from "lucide-react";
+import { UploadCloud, Image as ImageIcon, Video, AlertTriangle, CheckCircle, Loader2, Info } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import LanguageSelector from "@/components/LanguageSelector";
-import { detectImage, DetectImageResponse } from "@/services/api";
+import { detectImage, detectVideo, DetectImageResponse } from "@/services/api";
 
 const MediaVerification = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -15,20 +15,39 @@ const MediaVerification = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+  const MAX_VIDEO_SIZE = 15 * 1024 * 1024; // 15MB
+
+  const handleValidFile = (file: File) => {
+    const isVideo = file.type.startsWith("video/");
+    const limit = isVideo ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE;
+    
+    if (file.size > limit) {
+      toast({
+        title: "File too large",
+        description: `Max ${isVideo ? "15MB" : "5MB"} allowed for ${isVideo ? "videos" : "images"}.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSelectedFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setResult(null); // Reset previous result
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.type.startsWith("image/")) {
+      if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
         toast({
           title: "Invalid file type",
-          description: "Please upload an image file (JPEG, PNG, etc).",
+          description: "Please upload an image or video file.",
           variant: "destructive",
         });
         return;
       }
-      setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
-      setResult(null); // Reset previous result
+      handleValidFile(file);
     }
   };
 
@@ -39,10 +58,8 @@ const MediaVerification = () => {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith("image/")) {
-      setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
-      setResult(null);
+    if (file && (file.type.startsWith("image/") || file.type.startsWith("video/"))) {
+      handleValidFile(file);
     }
   };
 
@@ -52,17 +69,19 @@ const MediaVerification = () => {
     setIsAnalyzing(true);
     setResult(null);
 
+    const isVideo = selectedFile.type.startsWith("video/");
+
     try {
-      const response = await detectImage(selectedFile);
+      const response = isVideo ? await detectVideo(selectedFile) : await detectImage(selectedFile);
       setResult(response);
       toast({
         title: "Analysis Complete",
-        description: "Image verification finished successfully.",
+        description: `${isVideo ? "Video" : "Image"} verification finished successfully.`,
       });
     } catch (error: any) {
       toast({
         title: "Analysis Failed",
-        description: error.message || "Failed to analyze the image.",
+        description: error.message || "Failed to analyze the media.",
         variant: "destructive",
       });
     } finally {
@@ -102,13 +121,13 @@ const MediaVerification = () => {
         {/* Header */}
         <div className="text-center space-y-4">
           <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-primary/20 ring-1 ring-primary/30 mb-4 shadow-[0_0_30px_rgba(var(--primary),0.3)]">
-            <ImageIcon className="w-8 h-8 text-primary" />
+            <Video className="w-8 h-8 text-primary" />
           </div>
           <h1 className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-            Image Verification
+            Media Verification
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Upload an image to detect if it's AI-generated or authentic using our 
+            Upload an image or video to detect if it's AI-generated or authentic using our 
             advanced deep learning detector.
           </p>
         </div>
@@ -128,20 +147,28 @@ const MediaVerification = () => {
             type="file" 
             ref={fileInputRef} 
             onChange={handleFileSelect} 
-            accept="image/*" 
+            accept="image/*,video/*" 
             className="hidden" 
           />
           
-          {previewUrl ? (
+          {previewUrl && selectedFile ? (
             <div className="space-y-6">
-              <div className="relative w-full max-w-md mx-auto aspect-video rounded-xl overflow-hidden ring-1 ring-border shadow-2xl">
-                <img 
-                  src={previewUrl} 
-                  alt="Preview" 
-                  className="w-full h-full object-cover"
-                />
+              <div className="relative w-full max-w-md mx-auto aspect-video rounded-xl overflow-hidden ring-1 ring-border shadow-2xl bg-black flex items-center justify-center">
+                {selectedFile.type.startsWith("video/") ? (
+                  <video 
+                    src={previewUrl} 
+                    controls 
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <img 
+                    src={previewUrl} 
+                    alt="Preview" 
+                    className="w-full h-full object-cover"
+                  />
+                )}
               </div>
-              <p className="text-sm text-muted-foreground">Click or drag to replace image</p>
+              <p className="text-sm text-muted-foreground">Click or drag to replace media</p>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center space-y-4 py-8">
@@ -150,14 +177,14 @@ const MediaVerification = () => {
               </div>
               <div className="space-y-1">
                 <p className="text-xl font-medium text-foreground">
-                  Drag & Drop an image here
+                  Drag & Drop media here
                 </p>
                 <p className="text-sm text-muted-foreground">
                   or click to browse from your device
                 </p>
               </div>
               <p className="text-xs text-muted-foreground/70 pt-4">
-                Supports JPEG, PNG, WebP (Max 5MB)
+                Supports Images (JPEG, PNG, WebP - max 5MB) and Video (MP4, WEBM, MOV - max 15MB)
               </p>
             </div>
           )}
@@ -174,7 +201,7 @@ const MediaVerification = () => {
               {isAnalyzing ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Analyzing Image...
+                  {selectedFile.type.startsWith("video/") ? "Extracting Frames & Analyzing..." : "Analyzing Image..."}
                 </>
               ) : (
                 <>Detect AI Alteration</>
@@ -205,6 +232,7 @@ const MediaVerification = () => {
                   </div>
                   <p className="text-muted-foreground">
                     Based on analyzing {result.filename}
+                    {(result as any).frames_analyzed && ` (${(result as any).frames_analyzed} frames processed)`}
                   </p>
                 </div>
 
