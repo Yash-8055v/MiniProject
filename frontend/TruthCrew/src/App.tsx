@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Analyze from "./pages/Analyze";
 import About from "./pages/About";
 import Trending from "./pages/Trending";
+import MediaVerification from "./pages/MediaVerification";
 import NotFound from "./pages/NotFound";
 
 const App = () => (
@@ -24,6 +25,7 @@ const App = () => (
             <Route path="/analyze" element={<Analyze />} />
             <Route path="/about" element={<About />} />
             <Route path="/trending" element={<Trending />} />
+            <Route path="/media" element={<MediaVerification />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
