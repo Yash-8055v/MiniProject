@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Shield, AlertTriangle, Users } from 'lucide-react';
+import { ArrowRight, Shield, AlertTriangle, Users, Send } from 'lucide-react';
 import LeafletHeatmap from '../components/LeafletHeatmap';
 
 const Home = () => {
@@ -85,6 +85,63 @@ const Home = () => {
               <ArrowRight className="w-5 h-5" />
             </Link>
           </div>
+        </section>
+
+        {/* Telegram Bot CTA Section */}
+        <section className="mb-20">
+          <a
+            href="https://t.me/Truth_Crew_Bot"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block group"
+          >
+            <div
+              className="relative overflow-hidden rounded-2xl border border-[#2AABEE]/30 bg-card/60 backdrop-blur-xl shadow-2xl transition-all duration-300 hover:border-[#2AABEE]/60 hover:shadow-[0_0_60px_-10px_rgba(34,158,217,0.35)]"
+              style={{ background: 'linear-gradient(135deg, hsl(240 10% 8% / 0.95) 0%, hsl(200 70% 8% / 0.6) 100%)' }}
+            >
+              {/* Decorative Telegram glow blob */}
+              <div className="pointer-events-none absolute -top-16 -right-16 w-64 h-64 rounded-full bg-[#2AABEE]/10 blur-3xl" />
+              <div className="pointer-events-none absolute -bottom-10 -left-10 w-48 h-48 rounded-full bg-[#229ED9]/8 blur-2xl" />
+
+              <div className="relative flex flex-col md:flex-row items-center gap-8 p-8 md:p-10">
+                {/* Icon */}
+                <div className="flex-shrink-0 relative">
+                  {/* Pulse ring */}
+                  <div className="absolute inset-0 rounded-full bg-[#2AABEE] animate-pulse-ring opacity-30" />
+                  <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-tr from-[#229ED9] to-[#2AABEE] flex items-center justify-center shadow-lg shadow-[#229ED9]/40 group-hover:scale-105 transition-transform duration-300">
+                    <Send className="w-9 h-9 text-white fill-white -rotate-12 ml-[-3px] mt-[3px]" />
+                  </div>
+                </div>
+
+                {/* Text Content */}
+                <div className="flex-1 text-center md:text-left">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#2AABEE]/10 border border-[#2AABEE]/25 text-[#2AABEE] text-xs font-semibold uppercase tracking-widest mb-3">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#2AABEE] opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#2AABEE]" />
+                    </span>
+                    Now on Telegram
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
+                    Verify Claims Directly on{' '}
+                    <span style={{ color: '#2AABEE' }}>Telegram</span>
+                  </h2>
+                  <p className="text-muted-foreground text-base max-w-xl">
+                    Send any news headline to our bot and get an instant AI-powered fact-check — without leaving Telegram. Fast, free, and private.
+                  </p>
+                </div>
+
+                {/* CTA Button */}
+                <div className="flex-shrink-0">
+                  <div className="inline-flex items-center gap-3 px-7 py-3.5 rounded-xl font-semibold text-white bg-gradient-to-r from-[#229ED9] to-[#2AABEE] shadow-lg shadow-[#229ED9]/30 group-hover:shadow-[#229ED9]/50 group-hover:scale-[1.04] active:scale-[0.97] transition-all duration-300">
+                    <Send className="w-4 h-4 fill-white -rotate-12" />
+                    Open Bot
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-200" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </a>
         </section>
 
         {/* India Map Section */}

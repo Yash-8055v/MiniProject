@@ -10,6 +10,7 @@ import About from "./pages/About";
 import Trending from "./pages/Trending";
 import MediaVerification from "./pages/MediaVerification";
 import NotFound from "./pages/NotFound";
+import TelegramWidget from "./components/TelegramWidget";
 
 const App = () => (
   <TooltipProvider>
@@ -29,6 +30,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
+        <TelegramWidget />
       </div>
     </BrowserRouter>
   </TooltipProvider>
