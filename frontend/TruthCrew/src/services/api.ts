@@ -84,3 +84,39 @@ export async function fetchHeatmapInsight(
   return json.insight || "";
 }
 
+export interface DetectImageResponse {
+  status: string;
+  ai_probability: number;
+  verdict: string;
+  filename: string;
+  raw: { label: string; score: number }[];
+  explanation: {
+    english: string;
+    hindi: string;
+    marathi: string;
+  };
+}
+
+export async function detectImage(image: File): Promise<DetectImageResponse> {
+  const formData = new FormData();
+  formData.append("image", image);
+
+  const response = await fetch(`${API_URL}/api/detect-image`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    const message = errorData?.detail || `Server error (${response.status})`;
+    throw new Error(message);
+  }
+
+  const json = await response.json();
+  if (json.status !== "success") {
+    throw new Error("Unexpected response from server");
+  }
+
+  return json;
+}
+
