@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, CheckCircle, XCircle, HelpCircle, Loader2, AlertTriangle, Gauge, ExternalLink, ShieldCheck, Globe } from 'lucide-react';
+import { Search, CheckCircle, XCircle, HelpCircle, Loader2, AlertTriangle, Gauge, ExternalLink, ShieldCheck, Globe, Volume2 } from 'lucide-react';
 import LanguageSelector from '../components/LanguageSelector';
+import ScoreBreakdown from '../components/ScoreBreakdown';
+import VoiceInput from '../components/VoiceInput';
 import LeafletHeatmap from '../components/LeafletHeatmap';
 import type { HeatmapPoint } from '../components/LeafletHeatmap';
 import TopRegionsPanel from '../components/TopRegionsPanel';
 import HeatmapInsight from '../components/HeatmapInsight';
-import { verifyNews, fetchHeatmap, type VerifyResponse, type Source } from '../services/api';
+import { verifyNews, fetchHeatmap, speakText, type VerifyResponse, type Source } from '../services/api';
 
 type VerdictType = 'likely_true' | 'likely_false' | 'likely_misleading' | 'unverified';
 type Language = 'en' | 'hi' | 'mr';
@@ -31,19 +33,32 @@ const Analyze = () => {
   const [selectedLang, setSelectedLang] = useState<Language>('en');
   const [error, setError] = useState<string | null>(null);
   const [showAllSources, setShowAllSources] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
+  const loadingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [highlightedWordIdx, setHighlightedWordIdx] = useState(-1);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const highlightIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [heatmapData, setHeatmapData] = useState<Record<string, number> | null>(null);
   const [isHeatmapLoading, setIsHeatmapLoading] = useState(false);
   const [heatmapError, setHeatmapError] = useState(false);
   const [selectedRegion, setSelectedRegion] = useState<HeatmapPoint | null>(null);
 
-  const analyzeClaim = async () => {
-    const text = claim.trim();
-    if (!text) return;
+  const clearHighlightInterval = () => {
+    if (highlightIntervalRef.current) {
+      clearInterval(highlightIntervalRef.current);
+      highlightIntervalRef.current = null;
+    }
+    setHighlightedWordIdx(-1);
+  };
 
-    // Update URL to match current search
-    setSearchParams({ q: text });
+  const analyzeClaimText = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
 
+    setSearchParams({ q: trimmed });
     setIsAnalyzing(true);
+    setLoadingStep(1);
     setVerdict(null);
     setApiResult(null);
     setSelectedLang('en');
@@ -54,13 +69,20 @@ const Analyze = () => {
     setHeatmapError(false);
     setSelectedRegion(null);
 
+    // Auto-advance loading steps at realistic intervals (purely cosmetic UI)
+    const t1 = setTimeout(() => setLoadingStep((s) => Math.max(s, 2)), 500);
+    const t2 = setTimeout(() => setLoadingStep((s) => Math.max(s, 3)), 3000);
+    const t3 = setTimeout(() => setLoadingStep((s) => Math.max(s, 4)), 10000);
+    loadingTimerRef.current = t1; // store one ref to cancel pattern below
+    // Store all timers for cleanup
+    const allTimers = [t1, t2, t3];
+
     try {
-      const result = await verifyNews(text);
+      const result = await verifyNews(trimmed);
       setApiResult(result);
       setVerdict(mapVerdict(result.verdict));
 
-      // Fire heatmap fetch in parallel (non-blocking)
-      fetchHeatmap(text)
+      fetchHeatmap(trimmed)
         .then((data) => setHeatmapData(data))
         .catch(() => setHeatmapError(true))
         .finally(() => setIsHeatmapLoading(false));
@@ -69,9 +91,25 @@ const Analyze = () => {
       setError(message);
       setIsHeatmapLoading(false);
     } finally {
+      allTimers.forEach(clearTimeout);
+      loadingTimerRef.current = null;
+      setLoadingStep(0);
       setIsAnalyzing(false);
     }
   };
+
+  const analyzeClaim = () => analyzeClaimText(claim);
+
+  // Stop audio and clear word highlight when user switches language
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    clearHighlightInterval();
+    setIsPlayingAudio(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLang]);
 
   // Automatically trigger analysis on mount if a query parameter was provided
   useEffect(() => {
@@ -80,6 +118,60 @@ const Analyze = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const playExplanation = async () => {
+    if (!apiResult || isPlayingAudio) return;
+    const text = getExplanation(selectedLang);
+    if (!text) return;
+    const langMap: Record<Language, string> = { en: 'en-IN', hi: 'hi-IN', mr: 'mr-IN' };
+    setIsPlayingAudio(true);
+    try {
+      const blob = await speakText(text, langMap[selectedLang]);
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+
+      // Start word-by-word highlight when playback begins
+      audio.onplay = () => {
+        clearHighlightInterval();
+        const words = text.trim().split(/\s+/).filter(Boolean);
+        if (words.length === 0) return;
+        // Use actual audio duration; fall back to ~0.35 s/word estimate
+        const duration =
+          isFinite(audio.duration) && audio.duration > 0
+            ? audio.duration
+            : words.length * 0.35;
+        const msPerWord = (duration * 1000) / words.length;
+        let idx = 0;
+        setHighlightedWordIdx(0);
+        highlightIntervalRef.current = setInterval(() => {
+          idx++;
+          if (idx >= words.length) {
+            clearHighlightInterval();
+            return;
+          }
+          setHighlightedWordIdx(idx);
+        }, msPerWord);
+      };
+
+      audio.onended = () => {
+        setIsPlayingAudio(false);
+        clearHighlightInterval();
+        URL.revokeObjectURL(url);
+      };
+      audio.onerror = () => {
+        setIsPlayingAudio(false);
+        clearHighlightInterval();
+        URL.revokeObjectURL(url);
+      };
+
+      await audio.play();
+    } catch (err) {
+      setIsPlayingAudio(false);
+      clearHighlightInterval();
+      console.error('TTS failed:', err);
+    }
+  };
 
   const getExplanation = (lang: Language): string => {
     if (!apiResult) return '';
@@ -122,7 +214,15 @@ const Analyze = () => {
     }
   };
 
-  const getConfidenceColor = (confidence: number) => {
+  const getConfidenceColor = (confidence: number, v: VerdictType | null): string => {
+    if (v === 'likely_false') {
+      if (confidence >= 70) return 'bg-red-500';
+      if (confidence >= 40) return 'bg-orange-500';
+      return 'bg-yellow-500';
+    }
+    if (v === 'likely_misleading') return 'bg-yellow-500';
+    if (v === 'unverified') return 'bg-gray-500';
+    // likely_true
     if (confidence >= 70) return 'bg-green-500';
     if (confidence >= 40) return 'bg-yellow-500';
     return 'bg-red-500';
@@ -144,16 +244,35 @@ const Analyze = () => {
         {/* Input Section */}
         <section className="mb-12 animate-fade-up" style={{ animationDelay: '0.1s' }}>
           <div className="glass-card p-8 transition-all duration-300 hover:shadow-xl">
-            <div className="relative mb-6">
+            <div className="relative mb-2">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <input
                 type="text"
                 value={claim}
-                onChange={(e) => setClaim(e.target.value)}
+                onChange={(e) => setClaim(e.target.value.slice(0, 2000))}
                 onKeyDown={(e) => e.key === 'Enter' && analyzeClaim()}
                 placeholder="Enter a news headline or message…"
-                className="input-dark pl-12 transition-all duration-200 focus:shadow-lg"
+                maxLength={2000}
+                className="input-dark pl-12 pr-14 transition-all duration-200 focus:shadow-lg"
               />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <VoiceInput
+                  onTranscript={(text) => { setClaim(text.slice(0, 2000)); analyzeClaimText(text.slice(0, 2000)); }}
+                  disabled={isAnalyzing}
+                />
+              </div>
+            </div>
+            {/* Character counter */}
+            <div className="flex justify-end mb-4">
+              <span className={`text-xs transition-colors duration-200 ${
+                claim.length >= 2000
+                  ? 'text-red-400 font-medium'
+                  : claim.length >= 1800
+                  ? 'text-yellow-400'
+                  : 'text-muted-foreground/50'
+              }`}>
+                {claim.length} / 2000
+              </span>
             </div>
 
             <button
@@ -170,9 +289,74 @@ const Analyze = () => {
                 'Analyze Claim'
               )}
             </button>
+
+            {/* Example claim chips */}
+            <div className="mt-4">
+              <p className="text-xs text-muted-foreground mb-2 text-center">Try an example:</p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {[
+                  '5G towers cause cancer',
+                  'Onion juice cures dengue fever',
+                  "India's GDP grew 8.2% in 2024",
+                ].map((example) => (
+                  <button
+                    key={example}
+                    onClick={() => { setClaim(example); analyzeClaimText(example); }}
+                    disabled={isAnalyzing}
+                    className="px-3 py-1.5 text-xs rounded-full glass-card border border-primary/20 text-muted-foreground hover:text-primary hover:border-primary/50 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
+
+        {/* Loading Steps UI */}
+        {isAnalyzing && (
+          <section className="mb-12 animate-fade-up">
+            <div className="glass-card p-8">
+              <h3 className="text-center text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-6">
+                Verification in Progress
+              </h3>
+              <div className="space-y-4">
+                {([
+                  'Translating claim to English…',
+                  'Searching trusted sources…',
+                  'Running AI verification agents…',
+                  'Generating multilingual explanation…',
+                ] as const).map((label, idx) => {
+                  const stepNum = idx + 1;
+                  const isDone = loadingStep > stepNum;
+                  const isActive = loadingStep === stepNum;
+                  return (
+                    <div
+                      key={label}
+                      className={`flex items-center gap-3 transition-all duration-500 ${
+                        loadingStep >= stepNum ? 'opacity-100' : 'opacity-30'
+                      }`}
+                    >
+                      <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
+                        {isDone ? (
+                          <CheckCircle className="w-5 h-5 text-green-400" />
+                        ) : isActive ? (
+                          <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full border border-muted-foreground/30" />
+                        )}
+                      </div>
+                      <span className={`text-sm ${isDone ? 'text-muted-foreground line-through' : isActive ? 'text-foreground font-medium' : 'text-muted-foreground/50'}`}>
+                        {label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Error State */}
         {error && (
@@ -216,11 +400,19 @@ const Analyze = () => {
                 </div>
                 <div className="w-full h-3 bg-secondary rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-1000 ease-out ${getConfidenceColor(apiResult.confidence)}`}
+                    className={`h-full rounded-full transition-all duration-1000 ease-out ${getConfidenceColor(apiResult.confidence, verdict)}`}
                     style={{ width: `${apiResult.confidence}%` }}
                   />
                 </div>
               </div>
+
+              {/* Score Breakdown */}
+              {apiResult.credibility_layers && (
+                <ScoreBreakdown
+                  layers={apiResult.credibility_layers}
+                  finalScore={apiResult.confidence}
+                />
+              )}
 
               {/* Language Selector */}
               <div className="flex justify-center mb-6">
@@ -233,11 +425,53 @@ const Analyze = () => {
               {/* Explanation */}
               <div className="animate-fade-up space-y-5">
                 <div className="glass-card p-7 bg-secondary/50 transition-all duration-300 hover:bg-secondary/70">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-                    Explanation
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                      Explanation
+                    </h3>
+                    <button
+                      onClick={playExplanation}
+                      disabled={isPlayingAudio}
+                      title="Listen to explanation"
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full glass-card border transition-all duration-200 disabled:cursor-not-allowed ${
+                        isPlayingAudio
+                          ? 'border-primary/50 text-primary ring-1 ring-primary/20'
+                          : 'border-primary/20 text-muted-foreground hover:text-primary hover:border-primary/50'
+                      }`}
+                    >
+                      {isPlayingAudio ? (
+                        <span className="flex items-end gap-[2px] h-3.5 w-4">
+                          {[8, 12, 14, 12, 8].map((h, i) => (
+                            <span
+                              key={i}
+                              className="flex-1 bg-primary rounded-full animate-bounce"
+                              style={{ height: `${h}px`, animationDelay: `${i * 0.08}s` }}
+                            />
+                          ))}
+                        </span>
+                      ) : (
+                        <Volume2 className="w-3.5 h-3.5" />
+                      )}
+                      {isPlayingAudio ? 'Speaking…' : 'Listen'}
+                    </button>
+                  </div>
                   <p className={`text-foreground/90 text-lg leading-relaxed ${selectedLang !== 'en' ? 'devanagari' : ''}`}>
-                    {getExplanation(selectedLang)}
+                    {getExplanation(selectedLang)
+                      .trim()
+                      .split(/\s+/)
+                      .filter(Boolean)
+                      .map((word, i) => (
+                        <span
+                          key={i}
+                          className={
+                            i === highlightedWordIdx
+                              ? 'text-primary font-semibold underline decoration-primary/60 transition-colors duration-100'
+                              : 'transition-colors duration-100'
+                          }
+                        >
+                          {word}{' '}
+                        </span>
+                      ))}
                   </p>
                 </div>
 
@@ -314,7 +548,7 @@ const Analyze = () => {
                 Spread of this claim across India
               </h2>
               <p className="text-center text-sm text-muted-foreground mb-6">
-                Regional search interest based on Google Trends
+                Regional spread based on search trends, news coverage, and user queries
               </p>
 
               <div className={`grid gap-8 items-start ${
