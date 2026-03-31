@@ -7,9 +7,23 @@ export interface Source {
   trusted: boolean;
 }
 
+export interface CredibilityLayer {
+  score: number;
+  weight: number;
+}
+
+export interface CredibilityLayers {
+  source_tier: CredibilityLayer;
+  source_count: CredibilityLayer;
+  evidence_alignment: CredibilityLayer;
+  claim_verifiability: CredibilityLayer;
+  cross_agreement: CredibilityLayer;
+}
+
 export interface VerifyResponse {
   verdict: string;
   confidence: number;
+  credibility_layers?: CredibilityLayers;
   english: string;
   hindi: string;
   marathi: string;
@@ -115,6 +129,62 @@ export async function detectImage(image: File): Promise<DetectImageResponse> {
   const json = await response.json();
   if (json.status !== "success") {
     throw new Error("Unexpected response from server");
+  }
+
+  return json;
+}
+
+export async function transcribeAudio(audioBlob: Blob, filename = 'audio.webm'): Promise<string> {
+  const formData = new FormData();
+  formData.append('audio', audioBlob, filename);
+
+  const response = await fetch(`${API_URL}/api/agents/stt`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => null);
+    throw new Error(err?.detail || `STT error (${response.status})`);
+  }
+
+  const json = await response.json();
+  return json.transcript as string;
+}
+
+export async function speakText(text: string, language: string): Promise<Blob> {
+  const response = await fetch(`${API_URL}/api/agents/tts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, language }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => null);
+    throw new Error(err?.detail || `TTS error (${response.status})`);
+  }
+
+  return response.blob();
+}
+
+export async function detectAudio(audio: File): Promise<DetectImageResponse> {
+  const formData = new FormData();
+  formData.append('audio', audio);
+
+  const response = await fetch(`${API_URL}/api/detect-audio`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    const message = errorData?.detail || `Server error (${response.status})`;
+    throw new Error(message);
+  }
+
+  const json = await response.json();
+  if (json.status !== 'success') {
+    throw new Error('Unexpected response from server');
   }
 
   return json;

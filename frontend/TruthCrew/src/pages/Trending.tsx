@@ -130,21 +130,43 @@ function SkeletonCard() {
   );
 }
 
+function formatLastUpdated(isoString: string): string {
+  try {
+    const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000 / 60);
+    if (diff < 1) return 'just now';
+    if (diff < 60) return `${diff} min ago`;
+    const hrs = Math.floor(diff / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  } catch {
+    return '';
+  }
+}
+
 const Trending = () => {
   const [claims, setClaims] = useState<TrendingClaim[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchClaims = async () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${API_BASE}/api/trending-claims`);
-        if (!res.ok) throw new Error(`Server error: ${res.status}`);
-        const json = await res.json();
-        // Show only top 5
+        const [claimsRes, healthRes] = await Promise.all([
+          fetch(`${API_BASE}/api/trending-claims`),
+          fetch(`${API_BASE}/health`).catch(() => null),
+        ]);
+        if (!claimsRes.ok) throw new Error(`Server error: ${claimsRes.status}`);
+        const json = await claimsRes.json();
         setClaims((json.data ?? []).slice(0, 5));
+        if (healthRes?.ok) {
+          const health = await healthRes.json();
+          if (health.last_trending_refresh && health.last_trending_refresh !== 'never') {
+            setLastUpdated(health.last_trending_refresh);
+          }
+        }
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Failed to fetch claims');
       } finally {
@@ -173,6 +195,12 @@ const Trending = () => {
           <p className="text-lg text-muted-foreground max-w-xl mx-auto">
             Top false &amp; misleading claims spreading across India and globally right now.
           </p>
+
+          {lastUpdated && (
+            <p className="mt-3 text-xs text-muted-foreground/60">
+              Last updated: {formatLastUpdated(lastUpdated)}
+            </p>
+          )}
         </section>
 
         {/* Content */}

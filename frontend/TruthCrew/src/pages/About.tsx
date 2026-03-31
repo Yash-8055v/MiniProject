@@ -1,4 +1,4 @@
-import { Shield, Heart, Users, CheckCircle } from 'lucide-react';
+import { Shield, Heart, Users, CheckCircle, Github, Code2 } from 'lucide-react';
 
 const About = () => {
   return (
@@ -80,6 +80,66 @@ const About = () => {
         </section>
 
 
+
+        {/* Team Section */}
+        <section className="mb-16">
+          <h2 className="text-2xl font-bold text-foreground text-center mb-8 flex items-center justify-center gap-2">
+            <Users className="w-6 h-6 text-primary" />
+            The Team
+          </h2>
+          <div className="glass-card p-8">
+            <p className="text-muted-foreground text-center mb-6">
+              Built by B.Tech AI &amp; Data Science students as a national-level showcase project.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <a
+                href="https://github.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full glass-card border border-primary/20 text-sm text-muted-foreground hover:text-primary hover:border-primary/50 transition-all duration-200"
+              >
+                <Github className="w-4 h-4" />
+                View on GitHub
+              </a>
+            </div>
+          </div>
+        </section>
+
+        {/* Tech Stack */}
+        <section className="mb-16">
+          <h2 className="text-2xl font-bold text-foreground text-center mb-8 flex items-center justify-center gap-2">
+            <Code2 className="w-6 h-6 text-primary" />
+            Tech Stack
+          </h2>
+          <div className="glass-card p-8 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/30">
+                  <th className="text-left py-2 pr-6 text-muted-foreground font-semibold uppercase tracking-wider text-xs">Layer</th>
+                  <th className="text-left py-2 text-muted-foreground font-semibold uppercase tracking-wider text-xs">Technology</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/20">
+                {[
+                  ['AI Agents', 'CrewAI + Groq (llama-3.3-70b)'],
+                  ['Web Search', 'SerpAPI — 30-domain trusted whitelist'],
+                  ['Voice', 'Sarvam AI (STT + TTS) — 22 Indian languages'],
+                  ['Media Detection', 'HuggingFace Inference API'],
+                  ['Database', 'MongoDB Atlas — MD5-hash caching'],
+                  ['Trends', 'Google Trends (pytrends) + APScheduler'],
+                  ['Bot', 'Telegram Bot — python-telegram-bot'],
+                  ['Frontend', 'React + TypeScript + Tailwind CSS'],
+                  ['Backend', 'FastAPI + Python, hosted on Render'],
+                ].map(([layer, tech]) => (
+                  <tr key={layer}>
+                    <td className="py-3 pr-6 font-medium text-foreground/80 whitespace-nowrap">{layer}</td>
+                    <td className="py-3 text-muted-foreground">{tech}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
         {/* Closing Tagline */}
         <section className="text-center">
