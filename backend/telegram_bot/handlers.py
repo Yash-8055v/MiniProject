@@ -424,18 +424,22 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             ) or data.get("explanation", "")
 
             if explanation:
-                await update.message.chat.send_action(ChatAction.RECORD_VOICE)
+                await update.message.chat.send_action(ChatAction.UPLOAD_VOICE)
                 tts_bytes = await loop.run_in_executor(
                     None, partial(_sarvam_tts_sync, explanation, lang)
                 )
                 from io import BytesIO
-                await update.message.reply_voice(
-                    voice=BytesIO(tts_bytes),
-                    caption="🔊 *TruthCrew Voice Response*",
-                    parse_mode=ParseMode.MARKDOWN_V2,
+                buf = BytesIO(tts_bytes)
+                buf.name = "response.wav"
+                buf.seek(0)
+                # reply_audio accepts WAV; reply_voice requires OGG/OPUS
+                await update.message.reply_audio(
+                    audio=buf,
+                    title="TruthCrew Voice Response",
+                    performer="TruthCrew AI",
                 )
         except Exception as tts_err:
-            logger.warning(f"TTS reply failed (non-critical): {tts_err}")
+            logger.error(f"TTS reply failed: {tts_err}", exc_info=True)
 
     except Exception as e:
         logger.error(f"Voice handler error: {e}")
