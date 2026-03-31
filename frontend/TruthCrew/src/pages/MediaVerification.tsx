@@ -102,8 +102,9 @@ const MediaVerification = () => {
       }
       setResult(response);
       toast({ title: "Analysis Complete", description: `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} verification finished.` });
-    } catch (error: any) {
-      toast({ title: "Analysis Failed", description: error.message || "Failed to analyze media.", variant: "destructive" });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to analyze media.";
+      toast({ title: "Analysis Failed", description: msg, variant: "destructive" });
     } finally {
       setIsAnalyzing(false);
     }
@@ -145,7 +146,7 @@ const MediaVerification = () => {
         
         {/* Header */}
         <div className="text-center space-y-4">
-          <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-primary/20 ring-1 ring-primary/30 mb-4 shadow-[0_0_30px_rgba(var(--primary),0.3)]">
+          <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-primary/20 ring-1 ring-primary/30 mb-4 shadow-[0_0_30px_hsl(0_65%_45%_/_0.3)]">
             {activeTab === 'audio' ? <Mic className="w-8 h-8 text-primary" /> : <Video className="w-8 h-8 text-primary" />}
           </div>
           <h1 className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
@@ -219,15 +220,7 @@ const MediaVerification = () => {
             className="hidden"
           />
 
-          {activeTab === 'audio' && selectedFile ? (
-            <div className="flex flex-col items-center space-y-3 py-6">
-              <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
-                <Mic className="w-8 h-8 text-primary" />
-              </div>
-              <p className="text-foreground font-medium">{selectedFile.name}</p>
-              <p className="text-xs text-muted-foreground">Click or drag to replace</p>
-            </div>
-          ) : previewUrl && selectedFile ? (
+          {previewUrl && selectedFile ? (
             <div className="space-y-6">
               <div className="relative w-full max-w-md mx-auto aspect-video rounded-xl overflow-hidden ring-1 ring-border shadow-2xl bg-black flex items-center justify-center">
                 {selectedFile.type.startsWith("video/") ? (
@@ -241,22 +234,17 @@ const MediaVerification = () => {
           ) : (
             <div className="flex flex-col items-center justify-center space-y-4 py-8">
               <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center group-hover:scale-110 transition-transform">
-                {activeTab === 'audio' ? (
-                  <Mic className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
-                ) : (
-                  <UploadCloud className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
-                )}
+                <UploadCloud className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
               </div>
               <div className="space-y-1">
                 <p className="text-xl font-medium text-foreground">
-                  {activeTab === 'audio' ? 'Drop audio file here' : 'Drag & Drop media here'}
+                  Drag & Drop media here
                 </p>
                 <p className="text-sm text-muted-foreground">or click to browse from your device</p>
               </div>
               <p className="text-xs text-muted-foreground/70 pt-4">
                 {activeTab === 'image' && 'Images (JPEG, PNG, WebP — max 20MB)'}
                 {activeTab === 'video' && 'Video (MP4, WEBM, MOV — max 15MB)'}
-                {activeTab === 'audio' && 'Audio (MP3, WAV, OGG, WEBM — max 10MB)'}
               </p>
             </div>
           )}
@@ -268,15 +256,16 @@ const MediaVerification = () => {
             <button
               onClick={handleAnalyze}
               disabled={isAnalyzing}
-              className="px-8 py-4 bg-primary text-primary-foreground font-semibold rounded-xl text-lg hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 shadow-[0_0_20px_rgba(var(--primary),0.3)] hover:shadow-[0_0_30px_rgba(var(--primary),0.5)] transform hover:-translate-y-1 active:translate-y-0"
+              className="px-8 py-4 bg-primary text-primary-foreground font-semibold rounded-xl text-lg hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 shadow-[0_0_20px_hsl(0_65%_45%_/_0.3)] hover:shadow-[0_0_30px_hsl(0_65%_45%_/_0.5)] transform hover:-translate-y-1 active:translate-y-0"
             >
               {isAnalyzing ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  {activeTab === 'video' ? 'Extracting Frames & Analyzing…' : activeTab === 'audio' ? 'Analyzing Audio…' : 'Analyzing Image…'}
+                  {activeTab === 'video' ? 'Extracting Frames & Analyzing…' : 'Analyzing Image…'}
                 </>
               ) : (
-                <>Detect AI {activeTab === 'audio' ? 'Voice' : 'Alteration'}</>
+                <>Detect AI Alteration</>
+
               )}
             </button>
           </div>
@@ -306,7 +295,7 @@ const MediaVerification = () => {
                   </div>
                   <p className="text-muted-foreground">
                     Based on analyzing {result.filename}
-                    {(result as any).frames_analyzed && ` (${(result as any).frames_analyzed} frames processed)`}
+                    {'frames_analyzed' in result && ` (${(result as {frames_analyzed: number}).frames_analyzed} frames processed)`}
                   </p>
                 </div>
 
