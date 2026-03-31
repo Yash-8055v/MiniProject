@@ -5,11 +5,15 @@ import urllib.parse
 from datetime import datetime, timezone, timedelta
 from functools import partial
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Body
+import base64
+from io import BytesIO
+
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from typing import Optional
+from starlette.responses import StreamingResponse
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -23,9 +27,10 @@ from database.db import (
     get_cached_analysis,
     set_cached_analysis,
     get_last_refresh_time,
+    save_regional_query,
 )
 from trending.pipeline import run_refresh_pipeline
-from server.heatmap import get_google_trends_heatmap
+from server.heatmap import get_google_trends_heatmap, get_combined_heatmap
 from server.media_verification import router as media_verification_router
 import hashlib
 
@@ -220,12 +225,14 @@ class AnalyzeClaimRequest(BaseModel):
 
 
 @app.post("/api/analyze-claim")
-async def analyze_claim(body: AnalyzeClaimRequest):
+async def analyze_claim(request: Request, body: AnalyzeClaimRequest):
     """
     Bot-friendly claim analysis endpoint.
     Accepts { "query": "..." } and returns a structured result.
     Results are cached in MongoDB for 24 hours to minimise Groq API usage.
     """
+    import httpx
+
     claim = body.query.strip()
     if not claim:
         raise HTTPException(status_code=400, detail="query must not be empty")
@@ -240,7 +247,13 @@ async def analyze_claim(body: AnalyzeClaimRequest):
     if cached is not None:
         logger.info(f"🔥 Analysis cache HIT for: {claim[:60]}")
         cached["url"] = full_url  # always refresh URL in case WEBSITE_URL changed
+        # Still record the querying user's location even on cache hit
+        _track_query_location(request, claim_hash)
         return {"status": "success", "cached": True, "data": cached}
+
+    # ── IP geolocation — track which state the user is querying from ──
+    # Run before crew pipeline so the regional signal is ready when we build the heatmap
+    await _geolocate_and_save(request, claim_hash)
 
     # ── Run crew pipeline (blocking → executor) ──
     logger.info(f"🔍 Analysis cache MISS — running crew for: {claim[:60]}")
@@ -254,12 +267,16 @@ async def analyze_claim(body: AnalyzeClaimRequest):
         logger.error(f"Crew pipeline failed: {e}")
         raise HTTPException(status_code=500, detail="Analysis pipeline failed")
 
-    # ── Fetch top regions from heatmap (cached separately) ──
+    # ── Build combined heatmap (GT + news coverage + user geo) ──
+    sources = crew_result.get("sources", [])
     try:
         loop = asyncio.get_event_loop()
         heatmap = await loop.run_in_executor(
-            None, partial(get_google_trends_heatmap, claim)
+            None, partial(get_combined_heatmap, claim, claim_hash, sources)
         )
+        # Cache combined heatmap so /api/heatmap returns enriched data
+        query_hash = hashlib.md5(claim.lower().encode("utf-8")).hexdigest()
+        set_cached_heatmap(query_hash, heatmap)
         sorted_regions = sorted(heatmap.items(), key=lambda x: x[1], reverse=True)
         top_regions = [r for r, _ in sorted_regions[:5] if _ > 0]
     except Exception:
@@ -269,10 +286,11 @@ async def analyze_claim(body: AnalyzeClaimRequest):
         "claim": claim,
         "verdict": crew_result.get("verdict", "Unknown"),
         "confidence": crew_result.get("confidence", 0),
+        "credibility_layers": crew_result.get("credibility_layers", {}),
         "explanation": crew_result.get("english", ""),
         "explanation_hi": crew_result.get("hindi", ""),
         "explanation_mr": crew_result.get("marathi", ""),
-        "sources": crew_result.get("sources", []),
+        "sources": sources,
         "top_regions": top_regions,
         "url": full_url,
     }
@@ -281,6 +299,60 @@ async def analyze_claim(body: AnalyzeClaimRequest):
     set_cached_analysis(claim_hash, data)
 
     return {"status": "success", "cached": False, "data": data}
+
+
+# ---------------------------------------------------------------------------
+# Helpers — IP geolocation (non-fatal)
+# ---------------------------------------------------------------------------
+
+def _get_client_ip(request: Request) -> str:
+    """Extract the real client IP, honouring X-Forwarded-For (Render/Vercel proxy)."""
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return ""
+
+
+def _track_query_location(request: Request, claim_hash: str) -> None:
+    """Fire-and-forget synchronous IP tracking (used for cache-hit path)."""
+    import threading
+    ip = _get_client_ip(request)
+    if ip and ip not in ("127.0.0.1", "::1", ""):
+        threading.Thread(
+            target=_sync_geolocate_and_save, args=(ip, claim_hash), daemon=True
+        ).start()
+
+
+def _sync_geolocate_and_save(ip: str, claim_hash: str) -> None:
+    """Synchronous version of IP → state → MongoDB (runs in background thread)."""
+    import httpx as _httpx
+    try:
+        resp = _httpx.get(f"https://ipinfo.io/{ip}/json", timeout=5)
+        state = resp.json().get("region", "").strip().lower()
+        if state:
+            save_regional_query(claim_hash, state)
+            logger.info(f"📍 Recorded query from state: {state}")
+    except Exception:
+        pass
+
+
+async def _geolocate_and_save(request: Request, claim_hash: str) -> None:
+    """Async IP → state lookup, saves to regional_queries collection."""
+    import httpx
+    ip = _get_client_ip(request)
+    if not ip or ip in ("127.0.0.1", "::1", ""):
+        return
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(f"https://ipinfo.io/{ip}/json")
+            state = resp.json().get("region", "").strip().lower()
+            if state:
+                save_regional_query(claim_hash, state)
+                logger.info(f"📍 Recorded query from state: {state}")
+    except Exception:
+        pass  # Non-fatal — never block the analysis pipeline
 
 
 # ---------------------------------------------------------------------------
@@ -332,9 +404,9 @@ async def heatmap_data(
         logger.info(f"🔥 Heatmap cache HIT for: {query}")
         return {"status": "success", "data": cached}
 
-    # Cache miss — fetch from Google Trends
-    logger.info(f"🔍 Heatmap cache MISS — fetching from Google Trends: {query}")
-    data = get_google_trends_heatmap(query)
+    # Cache miss — build combined heatmap (GT + any stored user-query signal)
+    logger.info(f"🔍 Heatmap cache MISS — building combined heatmap: {query}")
+    data = get_combined_heatmap(query, claim_hash=query_hash)
 
     # Store in cache
     set_cached_heatmap(query_hash, data)
@@ -426,6 +498,119 @@ async def heatmap_insight(body: HeatmapInsightRequest):
         logger.error(f"Heatmap insight generation failed: {e}")
         return {"insight": ""}
 
+
+
+# ---------------------------------------------------------------------------
+# Sarvam AI — Speech-to-Text (STT)
+# ---------------------------------------------------------------------------
+@app.post("/api/agents/stt")
+async def sarvam_stt(audio: UploadFile = File(...)):
+    """
+    Accepts audio upload (.webm/.wav/.mp3/.ogg) and returns transcript via Sarvam AI.
+    Sarvam auto-detects Hindi, Marathi, and English.
+    """
+    import httpx
+
+    api_key = os.getenv("SARVAM_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="SARVAM_API_KEY not configured")
+
+    content = await audio.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Audio file is empty")
+
+    # Determine file extension for Sarvam
+    filename = audio.filename or "audio.webm"
+    content_type = audio.content_type or "audio/webm"
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                "https://api.sarvam.ai/speech-to-text",
+                headers={"api-subscription-key": api_key},
+                files={"file": (filename, content, content_type)},
+                data={"language_code": "unknown"},  # auto-detect
+            )
+        response.raise_for_status()
+        data = response.json()
+        transcript = data.get("transcript", "")
+        if not transcript:
+            raise HTTPException(status_code=422, detail="No transcript returned")
+        return {"transcript": transcript}
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Sarvam STT error: {e.response.text}")
+        raise HTTPException(status_code=502, detail="Speech recognition failed")
+    except Exception as e:
+        logger.error(f"Sarvam STT exception: {e}")
+        raise HTTPException(status_code=502, detail="Speech recognition failed")
+
+
+# ---------------------------------------------------------------------------
+# Sarvam AI — Text-to-Speech (TTS)
+# ---------------------------------------------------------------------------
+class TTSRequest(BaseModel):
+    text: str
+    language: str = "en-IN"  # "hi-IN" | "mr-IN" | "en-IN"
+
+
+_SARVAM_VOICES = {
+    "hi-IN": "priya",
+    "mr-IN": "kavitha",
+    "en-IN": "rahul",
+}
+
+
+@app.post("/api/agents/tts")
+async def sarvam_tts(body: TTSRequest):
+    """
+    Converts text to speech via Sarvam AI and returns audio/wav.
+    Sarvam TTS returns base64-encoded WAV inside JSON — decoded here.
+    """
+    import httpx
+
+    api_key = os.getenv("SARVAM_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="SARVAM_API_KEY not configured")
+
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text must not be empty")
+
+    # Truncate to Sarvam's limit (500 chars per request)
+    text = text[:500]
+    lang = body.language if body.language in _SARVAM_VOICES else "en-IN"
+    voice = _SARVAM_VOICES[lang]
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                "https://api.sarvam.ai/text-to-speech",
+                headers={
+                    "api-subscription-key": api_key,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "inputs": [text],
+                    "target_language_code": lang,
+                    "speaker": voice,
+                    "model": "bulbul:v3",
+                    "enable_preprocessing": True,
+                },
+            )
+        response.raise_for_status()
+        data = response.json()
+        # Sarvam returns { "audios": ["<base64_wav>"] }
+        audios = data.get("audios", [])
+        if not audios:
+            raise HTTPException(status_code=502, detail="No audio returned from TTS")
+        audio_bytes = base64.b64decode(audios[0])
+        return StreamingResponse(BytesIO(audio_bytes), media_type="audio/wav")
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Sarvam TTS error: {e.response.text}")
+        raise HTTPException(status_code=502, detail="Text-to-speech failed")
+    except Exception as e:
+        logger.error(f"Sarvam TTS exception: {e}")
+        raise HTTPException(status_code=502, detail="Text-to-speech failed")
 
 
 # ---------------------------------------------------------------------------
