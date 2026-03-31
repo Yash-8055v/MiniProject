@@ -111,6 +111,80 @@ export interface DetectImageResponse {
   };
 }
 
+export interface IntelligentDetectResponse {
+  status: string;
+  verdict: string;
+  verdict_label: string;
+  ai_probability: number;
+  confidence: string;
+  confidence_pct: number;
+  filename: string;
+  explanation: {
+    english: string;
+    hindi: string;
+    marathi: string;
+  };
+  sightengine: {
+    available: boolean;
+    score: number;
+    confidence: number;
+    ai_generated: number;
+    deepfake: number;
+    weight_used: number;
+    conflict: string;
+  };
+  phase_details: {
+    phase1_context: { score: number; reasoning: string[] };
+    phase2_reality: { score: number; reasoning: string[]; findings: Record<string, number> };
+    phase3_search: { score: number; reasoning: string[] };
+    phase4_pixel: { score: number; image_type: string; people_count: number; contact_zones: number; level_scores: Record<string, number>; key_evidence: string };
+    phase6_trend: { score: number; reasoning: string[] };
+  };
+  verdict_engine: {
+    final_score: number;
+    pipeline_score: number;
+    se_score: number;
+    se_weight_used: number;
+    se_conflict: string;
+    phase_scores: Record<string, number>;
+    weights_used: Record<string, number>;
+    conflicts: string[];
+  };
+}
+
+export async function detectImageIntelligent(
+  image: File,
+  source?: string,
+  description?: string,
+  suspicion?: string,
+  claims?: string,
+): Promise<IntelligentDetectResponse> {
+  const formData = new FormData();
+  formData.append('image', image);
+  if (source) formData.append('source', source);
+  if (description) formData.append('description', description);
+  if (suspicion) formData.append('suspicion', suspicion);
+  if (claims) formData.append('claims', claims);
+
+  const response = await fetch(`${API_URL}/api/detect-image-intelligent`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    const message = errorData?.detail || `Server error (${response.status})`;
+    throw new Error(message);
+  }
+
+  const json = await response.json();
+  if (json.status !== 'success') {
+    throw new Error('Unexpected response from server');
+  }
+
+  return json;
+}
+
 export async function detectImage(image: File): Promise<DetectImageResponse> {
   const formData = new FormData();
   formData.append("image", image);
