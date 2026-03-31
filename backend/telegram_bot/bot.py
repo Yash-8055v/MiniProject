@@ -26,6 +26,7 @@ from telegram_bot.handlers import (
     language_cmd,
     handle_message,
     handle_callback_query,
+    handle_voice,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,8 @@ BOT_DESCRIPTION = (
     "Send any claim or news headline and I'll fact-check it instantly using "
     "trusted sources and AI analysis.\n\n"
     "✅ Verify claims in seconds\n"
+    "🎙️ Send a voice message in Hindi, Marathi or English\n"
+    "🔊 Get spoken verdict back in your language\n"
     "🔥 See trending misinformation\n"
     "🌍 Know which regions are most affected\n"
     "📰 View actual sources used for verification\n"
@@ -79,6 +82,11 @@ def build_application() -> Application:
 
     # ── Inline button callbacks (language switching + preference setting) ──
     app.add_handler(CallbackQueryHandler(handle_callback_query))
+
+    # ── Voice messages (Sarvam STT → fact-check → Sarvam TTS) ──
+    app.add_handler(
+        MessageHandler(filters.VOICE, handle_voice)
+    )
 
     # ── Natural language / plain text ──
     app.add_handler(
