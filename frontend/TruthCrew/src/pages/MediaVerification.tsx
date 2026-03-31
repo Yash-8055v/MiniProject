@@ -18,7 +18,7 @@ const MediaVerification = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+  const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
   const MAX_VIDEO_SIZE = 15 * 1024 * 1024;
   const MAX_AUDIO_SIZE = 10 * 1024 * 1024;
 
@@ -254,7 +254,7 @@ const MediaVerification = () => {
                 <p className="text-sm text-muted-foreground">or click to browse from your device</p>
               </div>
               <p className="text-xs text-muted-foreground/70 pt-4">
-                {activeTab === 'image' && 'Images (JPEG, PNG, WebP — max 5MB)'}
+                {activeTab === 'image' && 'Images (JPEG, PNG, WebP — max 20MB)'}
                 {activeTab === 'video' && 'Video (MP4, WEBM, MOV — max 15MB)'}
                 {activeTab === 'audio' && 'Audio (MP3, WAV, OGG, WEBM — max 10MB)'}
               </p>
