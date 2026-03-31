@@ -259,7 +259,7 @@ async def detect_video(video: UploadFile = File(...)):
             "ai_probability": avg_ai_probability,
             "verdict": verdict,
             "filename": video.filename,
-            "raw": [{"label": "artificial", "score": avg_ai_probability / 100}],
+            "raw": [{"label": "Deepfake", "score": avg_ai_probability / 100}],
             "explanation": explanation,
             "frames_analyzed": valid_frames
         }
