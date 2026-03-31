@@ -18,6 +18,7 @@ _collection: Optional[Collection] = None
 _heatmap_collection: Optional[Collection] = None
 _analysis_cache_collection: Optional[Collection] = None
 _pipeline_state_collection: Optional[Collection] = None
+_regional_queries_collection: Optional[Collection] = None
 
 
 def get_collection() -> Collection:
@@ -210,6 +211,61 @@ def set_last_refresh_time() -> None:
         )
     except Exception:
         pass  # Non-fatal
+
+
+def get_regional_queries_collection() -> Collection:
+    """Return the regional_queries collection (tracks IP-geolocated query origins)."""
+    global _client, _regional_queries_collection
+
+    if _regional_queries_collection is not None:
+        return _regional_queries_collection
+
+    if _client is None:
+        get_collection()  # ensure connection
+
+    db = _client["truthcrew"]
+    _regional_queries_collection = db["regional_queries"]
+
+    # Compound index for fast per-claim lookups
+    _regional_queries_collection.create_index(
+        [("claim_hash", 1), ("state", 1)], unique=True
+    )
+    # TTL: auto-delete after 30 days
+    _regional_queries_collection.create_index(
+        "created_at", expireAfterSeconds=30 * 24 * 3600
+    )
+
+    return _regional_queries_collection
+
+
+def save_regional_query(claim_hash: str, state: str) -> None:
+    """
+    Record that a user from `state` queried this claim.
+    Uses upsert + $inc so repeated queries accumulate a count.
+    """
+    try:
+        col = get_regional_queries_collection()
+        col.update_one(
+            {"claim_hash": claim_hash, "state": state.lower()},
+            {
+                "$inc": {"count": 1},
+                "$setOnInsert": {
+                    "created_at": datetime.now(timezone.utc),
+                },
+            },
+            upsert=True,
+        )
+    except Exception:
+        pass  # Non-fatal
+
+
+def get_regional_query_counts(claim_hash: str) -> dict:
+    """Return {state: count} for all states that queried this claim."""
+    try:
+        col = get_regional_queries_collection()
+        return {doc["state"]: doc["count"] for doc in col.find({"claim_hash": claim_hash})}
+    except Exception:
+        return {}
 
 
 def close_connection() -> None:

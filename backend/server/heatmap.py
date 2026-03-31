@@ -1,7 +1,12 @@
 """
-Google Trends heatmap fetcher.
-Returns region-wise search interest for a given query within India.
-Falls back to deterministic simulated data when Trends is unavailable.
+Heatmap data for regional spread of a claim across Indian states.
+
+Combines three signals:
+  1. Google Trends interest-by-region  (weight 50%)
+  2. Regional news source coverage     (weight 30%)
+  3. IP-geolocated user queries        (weight 20%)
+
+Falls back gracefully when individual signals are unavailable.
 """
 
 import hashlib
@@ -24,7 +29,113 @@ urllib3.util.retry.Retry.__init__ = _patched_retry_init
 from pytrends.request import TrendReq
 from pytrends.exceptions import TooManyRequestsError
 
+from urllib.parse import urlparse
+
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Signal 2 — regional news source → state mapping
+# ---------------------------------------------------------------------------
+_DOMAIN_TO_STATE: dict[str, str] = {
+    # Maharashtra
+    "lokmat.com": "maharashtra",
+    "maharashtratimes.com": "maharashtra",
+    "mid-day.com": "maharashtra",
+    "punemirror.com": "maharashtra",
+    "loksatta.com": "maharashtra",
+    "esakal.com": "maharashtra",
+    # Gujarat
+    "divyabhaskar.co.in": "gujarat",
+    "gujaratsamachar.com": "gujarat",
+    "sandesh.com": "gujarat",
+    "gujaratmirror.in": "gujarat",
+    # Tamil Nadu
+    "dinakaran.com": "tamil nadu",
+    "dinamalar.com": "tamil nadu",
+    "dailythanthi.com": "tamil nadu",
+    "vikatan.com": "tamil nadu",
+    # Karnataka
+    "deccanherald.com": "karnataka",
+    "vijaykarnataka.com": "karnataka",
+    "prajavani.net": "karnataka",
+    "kannadadprabha.com": "karnataka",
+    # Telangana / Andhra Pradesh
+    "thehansindia.com": "telangana",
+    "telanganatoday.com": "telangana",
+    "eenadu.net": "andhra pradesh",
+    "andhrajyothy.com": "andhra pradesh",
+    # Kerala
+    "mathrubhumi.com": "kerala",
+    "manoramaonline.com": "kerala",
+    "keralakaumudi.com": "kerala",
+    "asianetnews.com": "kerala",
+    # Uttar Pradesh
+    "amarujala.com": "uttar pradesh",
+    "jagran.com": "uttar pradesh",
+    "livehindustan.com": "uttar pradesh",
+    # Madhya Pradesh
+    "bhaskar.com": "madhya pradesh",
+    "naidunia.com": "madhya pradesh",
+    # Punjab / Haryana
+    "punjabkesari.in": "punjab",
+    "tribuneindia.com": "punjab",
+    "ajitjalandhar.com": "punjab",
+    # Rajasthan
+    "patrika.com": "rajasthan",
+    "rajasthanpatrika.com": "rajasthan",
+    # West Bengal
+    "telegraphindia.com": "west bengal",
+    "anandabazar.com": "west bengal",
+    "sangbadpratidin.in": "west bengal",
+    # Bihar / Jharkhand
+    "prabhatkhabar.com": "jharkhand",
+    # Odisha
+    "sambad.com": "odisha",
+    "dharitri.com": "odisha",
+    # Assam / Northeast
+    "sentinelassam.com": "assam",
+    "assamtribune.com": "assam",
+    # Delhi-headquartered national papers (counted as delhi)
+    "hindustantimes.com": "delhi",
+    "ndtv.com": "delhi",
+    "indianexpress.com": "delhi",
+    "timesofindia.indiatimes.com": "delhi",
+    "thehindu.com": "tamil nadu",   # HQ Chennai
+}
+
+
+def _get_bare_domain(url: str) -> str:
+    """Extract bare domain (no www.) from a URL string."""
+    try:
+        return urlparse(url).netloc.lower().lstrip("www.")
+    except Exception:
+        return ""
+
+
+def _normalize(d: dict) -> dict:
+    """Scale all values in d to 0-100. Empty dict → empty dict."""
+    if not d:
+        return {}
+    max_val = max(d.values())
+    if max_val == 0:
+        return {k: 0 for k in d}
+    return {k: round(v / max_val * 100) for k, v in d.items()}
+
+
+def _get_news_coverage_signal(sources: list) -> dict:
+    """
+    Map source URLs to Indian states and count coverage per state.
+    Returns a normalized 0-100 dict. Unknown domains are ignored.
+    """
+    counts: dict[str, int] = {}
+    for src in sources:
+        url = src.get("url", "")
+        domain = _get_bare_domain(url)
+        state = _DOMAIN_TO_STATE.get(domain)
+        if state:
+            counts[state] = counts.get(state, 0) + 1
+    return _normalize(counts)
+
 
 # Reusable pytrends session
 _pytrends = TrendReq(hl="en-IN", tz=330, timeout=(10, 25), retries=2, backoff_factor=1)
@@ -111,4 +222,60 @@ def get_google_trends_heatmap(query: str) -> dict:
 
     # Fallback: deterministic simulated data so the map always shows something
     return _generate_fallback_data(clean_query)
+
+
+def get_combined_heatmap(
+    query: str,
+    claim_hash: str | None = None,
+    sources: list | None = None,
+) -> dict:
+    """
+    Combine three signals into a single 0-100 regional spread map.
+
+    Weights (re-normalized if a signal has no data):
+      - Google Trends      50 %
+      - News coverage      30 %  (requires sources list)
+      - User query geo     20 %  (requires claim_hash in MongoDB)
+    """
+    # Signal 1: Google Trends (always present — falls back to simulated data)
+    gt_data = get_google_trends_heatmap(query)
+
+    # Signal 2: regional news coverage
+    news_data = _get_news_coverage_signal(sources or [])
+
+    # Signal 3: IP-geolocated user queries
+    user_data: dict = {}
+    if claim_hash:
+        try:
+            from database.db import get_regional_query_counts
+            counts = get_regional_query_counts(claim_hash)
+            user_data = _normalize(counts)
+        except Exception:
+            pass
+
+    has_news = bool(news_data)
+    has_user = bool(user_data)
+
+    # If no enrichment signals are available, return raw GT data unchanged
+    if not has_news and not has_user:
+        return gt_data
+
+    # Compute effective weights (re-normalize so they always sum to 1.0)
+    w_gt = 0.5
+    w_news = 0.3 if has_news else 0.0
+    w_user = 0.2 if has_user else 0.0
+    total_w = w_gt + w_news + w_user
+
+    all_states = set(gt_data) | set(news_data) | set(user_data)
+    combined: dict[str, int] = {}
+    for state in all_states:
+        score = (
+            gt_data.get(state, 0) * (w_gt / total_w)
+            + news_data.get(state, 0) * (w_news / total_w)
+            + user_data.get(state, 0) * (w_user / total_w)
+        )
+        if score > 0:
+            combined[state] = round(score)
+
+    return combined
 
