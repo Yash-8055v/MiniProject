@@ -429,12 +429,13 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     None, partial(_sarvam_tts_sync, explanation, lang)
                 )
                 from io import BytesIO
+                from telegram import InputFile
                 buf = BytesIO(tts_bytes)
-                buf.name = "response.wav"
                 buf.seek(0)
+                input_file = InputFile(buf, filename="response.wav")
                 # reply_audio accepts WAV; reply_voice requires OGG/OPUS
                 await update.message.reply_audio(
-                    audio=buf,
+                    audio=input_file,
                     title="TruthCrew Voice Response",
                     performer="TruthCrew AI",
                 )
