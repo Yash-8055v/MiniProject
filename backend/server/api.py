@@ -32,6 +32,7 @@ from database.db import (
 from trending.pipeline import run_refresh_pipeline
 from server.heatmap import get_google_trends_heatmap, get_combined_heatmap
 from server.media_verification import router as media_verification_router
+from server.intelligent_image_detection import router as intelligent_detection_router
 import hashlib
 
 logging.basicConfig(level=logging.INFO)
@@ -169,6 +170,7 @@ app.add_middleware(
 
 # Register media verification routes (/api/detect-image, etc.)
 app.include_router(media_verification_router)
+app.include_router(intelligent_detection_router)
 
 
 # ---------------------------------------------------------------------------

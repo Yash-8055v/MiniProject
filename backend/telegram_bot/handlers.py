@@ -339,7 +339,7 @@ def _sarvam_tts_sync(text: str, lang: str) -> bytes:
             "text": text[:500],          # Sarvam TTS limit
             "target_language_code": target_lang,
             "speaker": speaker,
-            "model": "bulbul:v1",
+            "model": "bulbul:v3",
         },
         timeout=30,
     )
