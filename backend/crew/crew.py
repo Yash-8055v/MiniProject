@@ -8,6 +8,7 @@ import litellm
 
 from crew.llm import get_llm
 from tools.web_search import search_with_priority
+from server.credibility_scorer import calculate_credibility_score
 
 
 # Base paths
@@ -181,6 +182,10 @@ def run_crew(input_data: dict):
     if not search_results:
         raise ValueError("No search results returned from web search")
 
+    # Calculate credibility score BEFORE filtering sources
+    # (search_results has all fields including snippets; sources drops them)
+    credibility = calculate_credibility_score(search_results, english_claim)
+
     # Build clean sources list for the API response
     sources = [
         {
@@ -227,7 +232,9 @@ def run_crew(input_data: dict):
     raw = crew_output.raw if hasattr(crew_output, 'raw') else str(crew_output)
     result = parse_result(raw)
 
-    # Attach sources so they flow through to the API response
+    # Override LLM-guessed confidence with calculated credibility score
+    result["confidence"] = credibility["final_score"]
+    result["credibility_layers"] = credibility["layers"]
     result["sources"] = sources
 
     return result
