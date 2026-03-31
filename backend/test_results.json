@@ -1,0 +1,189 @@
+{
+  "total": 20,
+  "correct": 11,
+  "accuracy_percent": 100,
+  "fake_accuracy": "10/10",
+  "true_accuracy": "1/10",
+  "results": [
+    {
+      "claim": "5G towers cause COVID-19 and spread the coronavirus through radiation",
+      "category": "Health + Technology",
+      "expected": "false",
+      "actual": "false",
+      "raw_verdict": "Likely False",
+      "confidence": 91,
+      "correct": true
+    },
+    {
+      "claim": "COVID-19 vaccine contains microchips installed by Bill Gates to track people",
+      "category": "Health",
+      "expected": "false",
+      "actual": "false",
+      "raw_verdict": "Likely False",
+      "confidence": 93,
+      "correct": true
+    },
+    {
+      "claim": "Drinking cow urine cures cancer and all terminal diseases",
+      "category": "Health",
+      "expected": "false",
+      "actual": "false",
+      "raw_verdict": "Likely False",
+      "confidence": 74,
+      "correct": true
+    },
+    {
+      "claim": "NASA confirmed that India's Diwali lights were visible from space",
+      "category": "Science",
+      "expected": "false",
+      "actual": "false",
+      "raw_verdict": "Likely False",
+      "confidence": 86,
+      "correct": true
+    },
+    {
+      "claim": "WhatsApp will start charging users a monthly fee from next month",
+      "category": "Technology",
+      "expected": "false",
+      "actual": "misleading",
+      "raw_verdict": "Likely Misleading",
+      "confidence": 80,
+      "correct": true
+    },
+    {
+      "claim": "Eating raw garlic and onion juice completely prevents and cures dengue fever",
+      "category": "Health",
+      "expected": "false",
+      "actual": "false",
+      "raw_verdict": "Likely False",
+      "confidence": 68,
+      "correct": true
+    },
+    {
+      "claim": "Indian government is distributing free laptops to all students across India",
+      "category": "Government",
+      "expected": "false",
+      "actual": "misleading",
+      "raw_verdict": "Likely Misleading",
+      "confidence": 75,
+      "correct": true
+    },
+    {
+      "claim": "Petrol prices will be reduced to Rs 40 per litre after new government order",
+      "category": "Finance",
+      "expected": "false",
+      "actual": "false",
+      "raw_verdict": "Likely False",
+      "confidence": 87,
+      "correct": true
+    },
+    {
+      "claim": "Albert Einstein failed mathematics in school and was a poor student",
+      "category": "History",
+      "expected": "false",
+      "actual": "false",
+      "raw_verdict": "Likely False",
+      "confidence": 82,
+      "correct": true
+    },
+    {
+      "claim": "India has been declared the world's number one most peaceful country by UN",
+      "category": "Politics",
+      "expected": "false",
+      "actual": "false",
+      "raw_verdict": "Likely False",
+      "confidence": 85,
+      "correct": true
+    },
+    {
+      "claim": "India launched Chandrayaan-3 mission to the Moon in July 2023",
+      "category": "Science",
+      "expected": "true",
+      "actual": "true",
+      "raw_verdict": "Likely True",
+      "confidence": 94,
+      "correct": true
+    },
+    {
+      "claim": "India became the world's most populous country surpassing China in 2023",
+      "category": "Demographics",
+      "expected": "true",
+      "actual": "error",
+      "raw_verdict": "500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim",
+      "confidence": 0,
+      "correct": false
+    },
+    {
+      "claim": "India hosted the G20 Summit in New Delhi in September 2023",
+      "category": "Politics",
+      "expected": "true",
+      "actual": "error",
+      "raw_verdict": "500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim",
+      "confidence": 0,
+      "correct": false
+    },
+    {
+      "claim": "Sachin Tendulkar scored 100 international centuries in cricket",
+      "category": "Sports",
+      "expected": "true",
+      "actual": "error",
+      "raw_verdict": "500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim",
+      "confidence": 0,
+      "correct": false
+    },
+    {
+      "claim": "India's first female President was Pratibha Patil elected in 2007",
+      "category": "History",
+      "expected": "true",
+      "actual": "error",
+      "raw_verdict": "500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim",
+      "confidence": 0,
+      "correct": false
+    },
+    {
+      "claim": "WHO declared COVID-19 a pandemic in March 2020",
+      "category": "Health",
+      "expected": "true",
+      "actual": "error",
+      "raw_verdict": "500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim",
+      "confidence": 0,
+      "correct": false
+    },
+    {
+      "claim": "India won the ICC Cricket World Cup in 1983 and 2011",
+      "category": "Sports",
+      "expected": "true",
+      "actual": "error",
+      "raw_verdict": "500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim",
+      "confidence": 0,
+      "correct": false
+    },
+    {
+      "claim": "India's GDP growth rate was 8.2 percent in the financial year 2023-24",
+      "category": "Economy",
+      "expected": "true",
+      "actual": "error",
+      "raw_verdict": "500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim",
+      "confidence": 0,
+      "correct": false
+    },
+    {
+      "claim": "UPI digital payments crossed 10 billion transactions in a single month in India in 2023",
+      "category": "Technology",
+      "expected": "true",
+      "actual": "error",
+      "raw_verdict": "500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim",
+      "confidence": 0,
+      "correct": false
+    },
+    {
+      "claim": "The Right to Education Act making free education mandatory for children was passed in India in 2009",
+      "category": "Education",
+      "expected": "true",
+      "actual": "error",
+      "raw_verdict": "500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim",
+      "confidence": 0,
+      "correct": false
+    }
+  ]
+}
