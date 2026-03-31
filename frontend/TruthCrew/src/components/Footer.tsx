@@ -110,7 +110,7 @@ const Footer = () => {
               </div>
 
               <a
-                href="https://github.com"
+                href="https://github.com/Yash-8055v/MiniProject"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors duration-200 group"
