@@ -301,6 +301,150 @@ async def handle_callback_query(
             logger.debug(f"Callback edit suppressed: {e}")
 
 
+# ── Sarvam STT / TTS helpers ────────────────────────────────────────────────
+
+def _sarvam_stt_sync(audio_bytes: bytes) -> str:
+    """Blocking: send audio bytes to Sarvam STT, return transcript."""
+    import requests as req
+    api_key = os.getenv("SARVAM_API_KEY")
+    if not api_key:
+        raise RuntimeError("SARVAM_API_KEY not set")
+    resp = req.post(
+        "https://api.sarvam.ai/speech-to-text",
+        headers={"api-subscription-key": api_key},
+        files={"file": ("audio.ogg", audio_bytes, "audio/ogg")},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json().get("transcript", "")
+
+
+def _sarvam_tts_sync(text: str, lang: str) -> bytes:
+    """Blocking: send text to Sarvam TTS, return raw WAV bytes."""
+    import base64
+    import requests as req
+    api_key = os.getenv("SARVAM_API_KEY")
+    if not api_key:
+        raise RuntimeError("SARVAM_API_KEY not set")
+    lang_map = {
+        "en": ("en-IN", "meera"),
+        "hi": ("hi-IN", "meera"),
+        "mr": ("mr-IN", "meera"),
+    }
+    target_lang, speaker = lang_map.get(lang, ("en-IN", "meera"))
+    resp = req.post(
+        "https://api.sarvam.ai/text-to-speech",
+        headers={"api-subscription-key": api_key, "Content-Type": "application/json"},
+        json={
+            "text": text[:500],          # Sarvam TTS limit
+            "target_language_code": target_lang,
+            "speaker": speaker,
+            "model": "bulbul:v1",
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    audio_b64 = resp.json()["audios"][0]
+    return base64.b64decode(audio_b64)
+
+
+# ── /voice — handle voice messages ──────────────────────────────────────────
+
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle Telegram voice messages:
+    1. Download OGG audio from Telegram
+    2. Transcribe via Sarvam STT (Hindi / Marathi / English)
+    3. Fact-check the transcript
+    4. Reply with text verdict + voice explanation (Sarvam TTS)
+    """
+    user_id = update.effective_user.id
+
+    if not rate_limiter.is_allowed(user_id):
+        secs = rate_limiter.remaining_seconds(user_id)
+        await update.message.reply_text(
+            f"⏳ Please wait *{secs}s* before sending another request\\.",
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
+        return
+
+    await update.message.chat.send_action(ChatAction.TYPING)
+    processing_msg = await update.message.reply_text(
+        "🎙️ *Transcribing your voice message\\.\\.\\.*",
+        parse_mode=ParseMode.MARKDOWN_V2,
+    )
+
+    loop = asyncio.get_event_loop()
+
+    try:
+        # Step 1 — Download voice file from Telegram
+        voice_file = await context.bot.get_file(update.message.voice.file_id)
+        audio_bytes = bytes(await voice_file.download_as_bytearray())
+
+        # Step 2 — Sarvam STT
+        try:
+            transcript = await loop.run_in_executor(
+                None, partial(_sarvam_stt_sync, audio_bytes)
+            )
+        except Exception as stt_err:
+            logger.error(f"Sarvam STT failed: {stt_err}")
+            await processing_msg.edit_text(
+                "❌ Could not transcribe voice\\. Please type your claim instead\\.",
+                parse_mode=ParseMode.MARKDOWN_V2,
+            )
+            return
+
+        if not transcript or not transcript.strip():
+            await processing_msg.edit_text(
+                "❌ No speech detected\\. Please speak clearly and try again\\.",
+                parse_mode=ParseMode.MARKDOWN_V2,
+            )
+            return
+
+        # Step 3 — Show transcript + start analysis
+        await processing_msg.edit_text(
+            f"🎙️ *Heard:* _{fmt._escape(transcript[:100])}_\n\n🔍 *Fact\\-checking\\.\\.\\.*",
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
+
+        data = await _analyze_claim(transcript.strip())
+        lang = get_language(user_id)
+        reply_text, keyboard = fmt.format_analysis(data, lang=lang, claim_hash=data["_hash"])
+
+        await processing_msg.edit_text(
+            reply_text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN_V2,
+        )
+
+        # Step 4 — Sarvam TTS voice reply (non-critical — won't break if it fails)
+        try:
+            explanation = (
+                data.get("explanation_hi") if lang == "hi"
+                else data.get("explanation_mr") if lang == "mr"
+                else data.get("explanation", "")
+            ) or data.get("explanation", "")
+
+            if explanation:
+                await update.message.chat.send_action(ChatAction.RECORD_VOICE)
+                tts_bytes = await loop.run_in_executor(
+                    None, partial(_sarvam_tts_sync, explanation, lang)
+                )
+                from io import BytesIO
+                await update.message.reply_voice(
+                    voice=BytesIO(tts_bytes),
+                    caption="🔊 *TruthCrew Voice Response*",
+                    parse_mode=ParseMode.MARKDOWN_V2,
+                )
+        except Exception as tts_err:
+            logger.warning(f"TTS reply failed (non-critical): {tts_err}")
+
+    except Exception as e:
+        logger.error(f"Voice handler error: {e}")
+        await processing_msg.edit_text(
+            "❌ Unable to process voice message\\. Please try again or type your claim\\.",
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
+
+
 # ── Natural language claim extractor ────────────────────────────────────────
 
 def _extract_claim(text: str) -> str:
