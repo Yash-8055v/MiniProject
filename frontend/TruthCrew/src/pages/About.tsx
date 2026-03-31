@@ -93,7 +93,7 @@ const About = () => {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <a
-                href="https://github.com"
+                href="https://github.com/Yash-8055v/MiniProject"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full glass-card border border-primary/20 text-sm text-muted-foreground hover:text-primary hover:border-primary/50 transition-all duration-200"
