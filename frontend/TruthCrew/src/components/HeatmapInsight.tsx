@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sparkles, Loader2 } from 'lucide-react';
 import { fetchHeatmapInsight } from '../services/api';
 
@@ -11,12 +11,24 @@ export default function HeatmapInsight({ query, data }: HeatmapInsightProps) {
   const [insight, setInsight] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(false);
+  // Track the last key we fetched for — prevents refetch when parent re-renders
+  // with a new object reference but identical content
+  const fetchedKeyRef = useRef<string | null>(null);
+
+  // Serialize data to a stable string so the effect only re-runs when content changes,
+  // not when the parent passes a new object reference with the same values.
+  const dataKey = JSON.stringify(data);
 
   useEffect(() => {
     if (!query || !data || Object.keys(data).length === 0) {
       setInsight(null);
       return;
     }
+
+    const key = `${query}::${dataKey}`;
+    // Already fetched (or fetching) for this exact query+data — skip
+    if (fetchedKeyRef.current === key) return;
+    fetchedKeyRef.current = key;
 
     setIsLoading(true);
     setError(false);
@@ -40,7 +52,8 @@ export default function HeatmapInsight({ query, data }: HeatmapInsightProps) {
         }
       })
       .finally(() => setIsLoading(false));
-  }, [query, data]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, dataKey]);
 
   if (!query || !data || Object.keys(data).length === 0) return null;
 
