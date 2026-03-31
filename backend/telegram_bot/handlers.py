@@ -154,7 +154,8 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         logger.error(f"Claim analysis failed for '{claim}': {e}")
         await processing_msg.edit_text(
-            f"❌ Unable to analyse the claim right now.\n\nDeveloper error info: {e}"
+            "❌ Unable to analyse the claim right now\\. Please try again in a moment\\.",
+            parse_mode=ParseMode.MARKDOWN_V2,
         )
 
 

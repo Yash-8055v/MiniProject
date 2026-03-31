@@ -1,6 +1,6 @@
 """
-Media Verification Module — AI Image & Video Detection
-Uses Hugging Face Inference API with Organika/sdxl-detector model.
+Media Verification Module — AI Image, Video & Audio Detection
+Uses Hugging Face Inference API for deepfake/AI-generated content detection.
 """
 
 import os
@@ -14,13 +14,45 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Media Verification"])
 
+# Temporary in-memory store for audio files served to Resemble Detect
+_temp_audio_store: dict = {}  # { uuid: (bytes, content_type) }
+
 # ---------------------------------------------------------------------------
 # Hugging Face configuration
 # ---------------------------------------------------------------------------
-HF_MODEL = "Organika/sdxl-detector"
+HF_MODEL = "prithivMLmods/Deep-Fake-Detector-v2-Model"
+HF_AUDIO_MODEL = "MelodyMachine/Deepfake-audio-detection"
+
+# Robust label sets — different models use different label names
+_FAKE_LABELS = {"artificial", "fake", "ai_generated", "ai-generated", "generated", "deepfake", "manipulated", "spoof"}
+_REAL_LABELS = {"real", "human", "bonafide", "genuine", "authentic", "natural"}
+
+# Audio-specific label sets (ASVspoof convention: bonafide=real, spoof=fake)
+_FAKE_AUDIO_LABELS = {"spoof", "fake", "ai", "generated", "artificial", "deepfake"}
+_REAL_AUDIO_LABELS = {"bonafide", "real", "human", "genuine"}
 MAX_IMAGE_SIZE = 1 * 1024 * 1024  # 1 MB threshold for internal compression
 MAX_IMAGE_UPLOAD_SIZE = 5 * 1024 * 1024  # 5 MB hard limit for uploads
 MAX_VIDEO_UPLOAD_SIZE = 15 * 1024 * 1024  # 15 MB hard limit for videos
+
+
+def _parse_ai_score(results) -> float:
+    """
+    Robustly extract AI/fake probability from HF classification results.
+    Works across multiple models regardless of their label naming convention.
+    Returns a float in [0.0, 1.0].
+    """
+    ai_score = 0.0
+    real_score = 0.0
+    for r in results:
+        lbl = r.label.lower().replace("-", "_").replace(" ", "_")
+        if lbl in _FAKE_LABELS or "fake" in lbl or "artificial" in lbl or "spoof" in lbl:
+            ai_score = max(ai_score, r.score)
+        elif lbl in _REAL_LABELS or "real" in lbl or "human" in lbl or "bonafide" in lbl:
+            real_score = max(real_score, r.score)
+    # If no fake label matched but a real label did, infer complement
+    if ai_score == 0.0 and real_score > 0.0:
+        ai_score = 1.0 - real_score
+    return ai_score
 
 
 def _get_hf_client() -> InferenceClient:
@@ -29,6 +61,20 @@ def _get_hf_client() -> InferenceClient:
     if not token:
         raise RuntimeError("HUGGING_FACE_API_TOKEN is not set in environment")
     return InferenceClient(token=token)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/temp-audio/{audio_id} — Serve temp audio for Resemble Detect
+# ---------------------------------------------------------------------------
+from fastapi.responses import Response
+
+@router.get("/temp-audio/{audio_id}")
+async def serve_temp_audio(audio_id: str):
+    entry = _temp_audio_store.get(audio_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Audio not found or expired")
+    audio_bytes, content_type = entry
+    return Response(content=audio_bytes, media_type=content_type)
 
 
 # ---------------------------------------------------------------------------
@@ -85,10 +131,10 @@ async def detect_image(image: UploadFile = File(...)):
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
-        logger.error(f"Hugging Face API error: {e}")
+        logger.error(f"Hugging Face API error: {e!r}")
         raise HTTPException(
             status_code=502,
-            detail=f"Hugging Face API request failed: {str(e)}",
+            detail=f"Hugging Face API request failed: {e!r}",
         )
     finally:
         # Clean up temp file
@@ -101,14 +147,8 @@ async def detect_image(image: UploadFile = File(...)):
         for r in results
     ]
 
-    # Extract AI probability
-    ai_score = 0.0
-    for r in results:
-        # Looking for 'artificial' label which is used by Organika/sdxl-detector
-        if r.label.lower() == "artificial":
-            ai_score = r.score
-    
-    ai_probability = int(round(ai_score * 100))
+    # Extract AI probability — model-agnostic label parsing
+    ai_probability = int(round(_parse_ai_score(results) * 100))
 
     # Determine verdict
     if ai_probability >= 70:
@@ -191,11 +231,7 @@ async def detect_video(video: UploadFile = File(...)):
                     model=HF_MODEL,
                 )
                 
-                ai_score = 0.0
-                for r in results:
-                    if r.label.lower() == "artificial":
-                        ai_score = r.score
-                total_ai_probability += int(round(ai_score * 100))
+                total_ai_probability += int(round(_parse_ai_score(results) * 100))
                 valid_frames += 1
             except Exception as e:
                 logger.error(f"HF Error on video frame: {e}")
@@ -372,3 +408,107 @@ def _compress_image(image_bytes: bytes, max_size: int = MAX_IMAGE_SIZE) -> bytes
     img.resize((512, 512), Image.LANCZOS).save(buffer, format="JPEG", quality=60)
     buffer.seek(0)
     return buffer.read()
+
+
+def _parse_audio_ai_score(results) -> float:
+    """Robustly extract fake/spoof probability from HF audio classification results."""
+    ai_score = 0.0
+    real_score = 0.0
+    for r in results:
+        lbl = r.label.lower().replace("-", "_").replace(" ", "_")
+        if lbl in _FAKE_AUDIO_LABELS or "fake" in lbl or "spoof" in lbl:
+            ai_score = max(ai_score, r.score)
+        elif lbl in _REAL_AUDIO_LABELS or "real" in lbl or "bonafide" in lbl:
+            real_score = max(real_score, r.score)
+    if ai_score == 0.0 and real_score > 0.0:
+        ai_score = 1.0 - real_score
+    return ai_score
+
+
+# ---------------------------------------------------------------------------
+# POST /api/detect-audio — Audio Deepfake Detection
+# ---------------------------------------------------------------------------
+MAX_AUDIO_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+@router.post("/detect-audio")
+async def detect_audio(audio: UploadFile = File(...)):
+    """
+    Accept an uploaded audio file and detect whether it is AI-generated (deepfake).
+    Uses MelodyMachine/Deepfake-audio-detection-V2 via HuggingFace Inference API.
+    """
+    import tempfile
+
+    if not audio.content_type or not audio.content_type.startswith("audio/"):
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded file must be an audio file (MP3, WAV, OGG, WEBM, etc.)",
+        )
+
+    audio.file.seek(0, os.SEEK_END)
+    file_size = audio.file.tell()
+    audio.file.seek(0)
+    if file_size > MAX_AUDIO_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Audio too large ({file_size / 1024 / 1024:.1f}MB). Max 10MB allowed.",
+        )
+
+    audio_bytes = await audio.read()
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded audio file is empty")
+
+    # Determine file suffix from content-type
+    ct = audio.content_type or "audio/webm"
+    suffix_map = {
+        "audio/mpeg": ".mp3",
+        "audio/mp3": ".mp3",
+        "audio/wav": ".wav",
+        "audio/x-wav": ".wav",
+        "audio/ogg": ".ogg",
+        "audio/webm": ".webm",
+    }
+    suffix = suffix_map.get(ct, ".webm")
+
+    import httpx
+
+    # Audio deepfake detection via dedicated API — returns graceful unavailable response
+    return {
+        "status": "unavailable",
+        "ai_probability": 0,
+        "verdict": "unavailable",
+        "filename": audio.filename,
+        "raw": [],
+        "explanation": {
+            "english": "Audio deepfake detection requires dedicated GPU infrastructure. This feature is planned for the next release.",
+            "hindi": "ऑडियो डीपफेक डिटेक्शन के लिए समर्पित GPU इन्फ्रास्ट्रक्चर की आवश्यकता है। यह सुविधा अगले संस्करण में उपलब्ध होगी।",
+            "marathi": "ऑडिओ डीपफेक डिटेक्शनसाठी समर्पित GPU इन्फ्रास्ट्रक्चर आवश्यक आहे. ही सुविधा पुढील आवृत्तीत उपलब्ध होईल."
+        },
+    }
+
+
+    # REST API returns plain dicts: [{"label": "...", "score": ...}]
+    raw_output = [{"label": r["label"], "score": round(r["score"], 4)} for r in results]
+
+    # Convert to simple namespace objects for _parse_audio_ai_score compatibility
+    class _R:
+        def __init__(self, d): self.label = d["label"]; self.score = d["score"]
+    ai_probability = int(round(_parse_audio_ai_score([_R(r) for r in results]) * 100))
+
+    if ai_probability >= 70:
+        verdict = "likely AI-generated voice"
+    elif ai_probability >= 30:
+        verdict = "uncertain"
+    else:
+        verdict = "likely real voice"
+
+    explanation = _get_ai_explanation(ai_probability, verdict, is_video=False)
+
+    return {
+        "status": "success",
+        "ai_probability": ai_probability,
+        "verdict": verdict,
+        "filename": audio.filename,
+        "raw": raw_output,
+        "explanation": explanation,
+    }

@@ -45,7 +45,7 @@ def _call_serpapi(params: dict) -> list[dict]:
         raise ValueError("SEARCH_API_KEY not found in .env")
 
     response = requests.get(
-        "https://serpapi.com/search", params=params, timeout=10
+        "https://serpapi.com/search", params=params, timeout=25
     )
     response.raise_for_status()
     data = response.json()
