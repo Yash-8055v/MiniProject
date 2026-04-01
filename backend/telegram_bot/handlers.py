@@ -303,8 +303,8 @@ async def handle_callback_query(
 
 # ── Sarvam STT / TTS helpers ────────────────────────────────────────────────
 
-def _sarvam_stt_sync(audio_bytes: bytes) -> str:
-    """Blocking: send audio bytes to Sarvam STT, return transcript."""
+def _sarvam_stt_sync(audio_bytes: bytes) -> tuple[str, str]:
+    """Blocking: send audio bytes to Sarvam STT, return (transcript, lang_code)."""
     import requests as req
     api_key = os.getenv("SARVAM_API_KEY")
     if not api_key:
@@ -313,10 +313,18 @@ def _sarvam_stt_sync(audio_bytes: bytes) -> str:
         "https://api.sarvam.ai/speech-to-text",
         headers={"api-subscription-key": api_key},
         files={"file": ("audio.ogg", audio_bytes, "audio/ogg")},
+        data={"language_code": "unknown"},
         timeout=30,
     )
     resp.raise_for_status()
-    return resp.json().get("transcript", "")
+    result = resp.json()
+    transcript = result.get("transcript", "")
+    # Sarvam returns language_code like "hi-IN", "mr-IN", "en-IN"
+    detected_lang = result.get("language_code", "en-IN")
+    # Map to our short codes: "hi-IN" → "hi", "mr-IN" → "mr", else "en"
+    lang_map = {"hi-IN": "hi", "mr-IN": "mr", "en-IN": "en"}
+    short_lang = lang_map.get(detected_lang, "en")
+    return transcript, short_lang
 
 
 def _sarvam_tts_sync(text: str, lang: str) -> bytes:
@@ -381,9 +389,9 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         voice_file = await context.bot.get_file(update.message.voice.file_id)
         audio_bytes = bytes(await voice_file.download_as_bytearray())
 
-        # Step 2 — Sarvam STT
+        # Step 2 — Sarvam STT (returns transcript + detected language)
         try:
-            transcript = await loop.run_in_executor(
+            transcript, detected_lang = await loop.run_in_executor(
                 None, partial(_sarvam_stt_sync, audio_bytes)
             )
         except Exception as stt_err:
@@ -401,6 +409,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             )
             return
 
+        # Use detected language from voice (not saved preference)
+        lang = detected_lang
+        logger.info(f"🎙️ Detected voice language: {lang}")
+
         # Step 3 — Show transcript + start analysis
         await processing_msg.edit_text(
             f"🎙️ *Heard:* _{fmt._escape(transcript[:100])}_\n\n🔍 *Fact\\-checking\\.\\.\\.*",
@@ -408,7 +420,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
 
         data = await _analyze_claim(transcript.strip())
-        lang = get_language(user_id)
         reply_text, keyboard = fmt.format_analysis(data, lang=lang, claim_hash=data["_hash"])
 
         await processing_msg.edit_text(
