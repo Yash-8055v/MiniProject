@@ -327,19 +327,19 @@ def _sarvam_tts_sync(text: str, lang: str) -> bytes:
     if not api_key:
         raise RuntimeError("SARVAM_API_KEY not set")
     lang_map = {
-        "en": ("en-IN", "meera"),
-        "hi": ("hi-IN", "meera"),
-        "mr": ("mr-IN", "meera"),
+        "en": ("en-IN", "rahul"),
+        "hi": ("hi-IN", "priya"),
+        "mr": ("mr-IN", "kavitha"),
     }
-    target_lang, speaker = lang_map.get(lang, ("en-IN", "meera"))
+    target_lang, speaker = lang_map.get(lang, ("en-IN", "rahul"))
     resp = req.post(
         "https://api.sarvam.ai/text-to-speech",
         headers={"api-subscription-key": api_key, "Content-Type": "application/json"},
         json={
-            "text": text[:500],          # Sarvam TTS limit
+            "inputs": [text[:500]],      # v3 uses "inputs" array, max 500 chars
             "target_language_code": target_lang,
             "speaker": speaker,
-            "model": "bulbul:v1",
+            "model": "bulbul:v3",
         },
         timeout=30,
     )
