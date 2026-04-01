@@ -250,11 +250,39 @@ def _extract_json(text: str) -> dict:
 # POST /api/detect-image
 # ---------------------------------------------------------------------------
 
-@router.post("/detect-image")
-async def detect_image(image: UploadFile = File(...)):
+@router.post(
+    "/detect-image",
+    tags=["🖼️ Media Verification"],
+    summary="Detect AI-generated images using Groq Vision",
+    response_description="AI probability score (0-100), verdict, and multilingual explanation",
+)
+async def detect_image(
+    image: UploadFile = File(
+        ...,
+        description="Image file to analyze (JPEG, PNG, WebP). Max 20 MB.",
+    ),
+):
     """
-    Accept an uploaded image and use Groq Vision (LLaMA multimodal) to
-    determine whether it is AI-generated or a real photograph.
+    ## AI Image Detection (Groq Vision)
+
+    Analyzes an uploaded image using **Groq Vision (LLaMA 4 Scout 17B)** to determine
+    whether it is AI-generated or a real photograph.
+
+    ### Analysis Signals
+    1. **Visual Analysis**: LLM examines lighting, textures, geometry, hands, text, symmetry
+    2. **Filename Metadata**: Checks for AI generator keywords (midjourney, dalle, sora, etc.)
+    3. **Combined Score**: Takes the higher of visual and filename signals
+
+    ### Verdict Thresholds
+    | Score Range | Verdict |
+    |-----------|----------|
+    | 70-100 | Likely AI-Generated |
+    | 35-69 | Uncertain |
+    | 0-34 | Likely Real |
+
+    ### Limits
+    - Max upload size: **20 MB**
+    - Images >1 MB are auto-compressed before analysis
     """
     if not image.content_type or not image.content_type.startswith("image/"):
         raise HTTPException(
@@ -297,11 +325,33 @@ async def detect_image(image: UploadFile = File(...)):
 # POST /api/detect-video
 # ---------------------------------------------------------------------------
 
-@router.post("/detect-video")
-async def detect_video(video: UploadFile = File(...)):
+@router.post(
+    "/detect-video",
+    tags=["🖼️ Media Verification"],
+    summary="Detect AI-generated videos using frame analysis",
+    response_description="Averaged AI probability from 2 analyzed frames, verdict, and explanation",
+)
+async def detect_video(
+    video: UploadFile = File(
+        ...,
+        description="Video file to analyze (MP4, WEBM, MOV). Max 15 MB.",
+    ),
+):
     """
-    Accept an uploaded video, extract 2 representative frames, analyze each
-    with Groq Vision, and return the averaged AI probability.
+    ## AI Video Detection (Frame Analysis)
+
+    Analyzes video by extracting representative frames and running each through
+    **Groq Vision** for AI-generated content detection.
+
+    ### Process
+    1. Extract 3 evenly-spaced frames (start, middle, end) using OpenCV
+    2. Analyze 2 frames (first + middle) with Groq Vision
+    3. Average the AI probability scores
+    4. Apply same verdict thresholds as image detection
+
+    ### Limits
+    - Max upload size: **15 MB**
+    - Frames are compressed to JPEG before analysis
     """
     if not video.content_type or not video.content_type.startswith("video/"):
         raise HTTPException(
@@ -387,9 +437,31 @@ async def detect_video(video: UploadFile = File(...)):
 # POST /api/detect-audio — Coming Soon
 # ---------------------------------------------------------------------------
 
-@router.post("/detect-audio")
-async def detect_audio(audio: UploadFile = File(...)):
-    """Audio deepfake detection — planned for next release."""
+@router.post(
+    "/detect-audio",
+    tags=["🖼️ Media Verification"],
+    summary="Audio deepfake detection (coming soon)",
+    response_description="Placeholder response — feature requires dedicated GPU infrastructure",
+)
+async def detect_audio(
+    audio: UploadFile = File(
+        ...,
+        description="Audio file to analyze (MP3, WAV, OGG, WEBM). Max 10 MB.",
+    ),
+):
+    """
+    ## Audio Deepfake Detection (Planned)
+
+    ⚠️ **This feature is currently unavailable.**
+
+    Audio deepfake detection requires dedicated GPU infrastructure that is not
+    available on the current free-tier hosting. This endpoint validates the upload
+    and returns a placeholder response.
+
+    ### Planned Implementation
+    - Resemble AI Detect API for voice clone detection
+    - Spectral analysis for synthetic speech artifacts
+    """
     if not audio.content_type or not audio.content_type.startswith("audio/"):
         raise HTTPException(
             status_code=400,

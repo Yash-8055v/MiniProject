@@ -10,9 +10,9 @@ from io import BytesIO
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, Any
 from starlette.responses import StreamingResponse
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -147,9 +147,264 @@ async def lifespan(app: FastAPI):
 
 
 # ---------------------------------------------------------------------------
-# FastAPI app
+# Pydantic Response Models — for auto-generated API documentation
 # ---------------------------------------------------------------------------
-app = FastAPI(title="Fake News Verification API", lifespan=lifespan)
+
+class SourceItem(BaseModel):
+    """A single news source used during verification."""
+    title: str = Field(..., description="Headline of the source article", example="India GDP growth slows to 6.3% — Reuters")
+    url: str = Field(..., description="Full URL to the source article", example="https://reuters.com/article/india-gdp-2025")
+    source: str = Field(..., description="Domain or publisher name", example="reuters.com")
+    trusted: bool = Field(..., description="Whether this source is from a pre-approved trusted domain list", example=True)
+
+
+class CredibilityLayer(BaseModel):
+    """One layer of the multi-layer credibility scoring system."""
+    score: int = Field(..., ge=0, le=100, description="Score for this layer (0-100)", example=75)
+    weight: int = Field(..., description="Weight of this layer in the final score (percentage)", example=35)
+
+
+class CredibilityLayers(BaseModel):
+    """Breakdown of the 5-layer credibility scoring system."""
+    source_tier: CredibilityLayer = Field(..., description="Layer 1: Average quality tier of source domains (Gov=100, Int'l=90, National=75, Regional=55, Unknown=20)")
+    source_count: CredibilityLayer = Field(..., description="Layer 2: Number of sources found (normalized: 8 sources = 100)")
+    evidence_alignment: CredibilityLayer = Field(..., description="Layer 3: Percentage of sources from known trusted domains")
+    claim_verifiability: CredibilityLayer = Field(..., description="Layer 4: Heuristic score based on claim specificity (numbers, proper nouns, dates)")
+    cross_agreement: CredibilityLayer = Field(..., description="Layer 5: Number of independent trusted sources agreeing (0=0, 1=40, 2=70, 3+=100)")
+
+
+class VerifyResponseData(BaseModel):
+    """Structured result from the CrewAI verification pipeline."""
+    verdict: str = Field(..., description="Verification verdict", example="Likely False")
+    confidence: int = Field(..., ge=0, le=100, description="Credibility confidence score (0-100) calculated from 5-layer system", example=72)
+    english: str = Field("", description="Explanation in English")
+    hindi: str = Field("", description="Explanation in Hindi (Devanagari)")
+    marathi: str = Field("", description="Explanation in Marathi (Devanagari)")
+    sources: list[SourceItem] = Field(default_factory=list, description="List of news sources used for verification")
+    credibility_layers: CredibilityLayers | None = Field(None, description="Detailed 5-layer credibility score breakdown")
+
+
+class VerifyResponse(BaseModel):
+    """Response from the /verify endpoint."""
+    status: str = Field("success", description="Request status", example="success")
+    languages: list[str] = Field(["en", "hi", "mr"], description="Languages available in the response")
+    data: VerifyResponseData
+
+
+class AnalyzeClaimData(BaseModel):
+    """Structured result from the /api/analyze-claim endpoint."""
+    claim: str = Field(..., description="The original claim text submitted")
+    verdict: str = Field(..., description="One of: Likely True, Likely False, Likely Misleading", example="Likely False")
+    confidence: int = Field(..., ge=0, le=100, description="Credibility confidence score (0-100)", example=68)
+    credibility_layers: CredibilityLayers | None = Field(None, description="Detailed 5-layer credibility breakdown")
+    explanation: str = Field("", description="Explanation in English")
+    explanation_hi: str = Field("", description="Explanation in Hindi")
+    explanation_mr: str = Field("", description="Explanation in Marathi")
+    sources: list[SourceItem] = Field(default_factory=list, description="Sources used for verification")
+    top_regions: list[str] = Field(default_factory=list, description="Top 5 Indian states where this claim is trending")
+    url: str = Field("", description="Link to full analysis on the TruthCrew website")
+
+
+class AnalyzeClaimResponse(BaseModel):
+    """Response from /api/analyze-claim."""
+    status: str = Field("success", example="success")
+    cached: bool = Field(..., description="Whether the result was served from MongoDB cache (24h TTL)", example=False)
+    data: AnalyzeClaimData
+
+
+class TrendingClaimItem(BaseModel):
+    """A single trending misinformation claim stored in MongoDB."""
+    model_config = {"populate_by_name": True}
+    id: str = Field("", alias="_id", description="MongoDB document ID")
+    claim_hash: str = Field(..., description="MD5 hash of normalized claim text for deduplication")
+    claim: str = Field(..., description="The misleading claim text", example="5G towers cause COVID-19")
+    explanation: str = Field("", description="Why this claim is misleading")
+    category: str = Field("General", description="Category: Health, Politics, Science, Technology, Social Media, etc.", example="Health")
+    misleading_score: int = Field(..., ge=0, le=100, description="How misleading the claim is (50-100)", example=85)
+    source_name: str = Field("Unknown", description="Fact-check source that debunked this claim", example="AltNews")
+    source_url: str = Field("", description="URL of the fact-check article")
+    region: str = Field("global", description="Region: global, india, maharashtra, etc.", example="india")
+    published_at: str = Field("", description="ISO timestamp when the fact-check was published")
+    created_at: str = Field("", description="ISO timestamp when stored in MongoDB")
+    trending_score: int = Field(1, description="Accumulated trending frequency score")
+
+
+class TrendingClaimsResponse(BaseModel):
+    """Response from /api/trending-claims."""
+    status: str = Field("success", example="success")
+    region_filter: str = Field("all", description="Applied region filter", example="india")
+    count: int = Field(..., description="Number of claims returned", example=10)
+    data: list[TrendingClaimItem]
+
+
+class HeatmapResponse(BaseModel):
+    """Response from /api/heatmap — regional spread scores."""
+    status: str = Field("success", example="success")
+    data: dict[str, int] = Field(
+        ...,
+        description="Map of Indian state names (lowercase) to interest scores (0-100). Example: {'maharashtra': 85, 'delhi': 72}",
+        example={"maharashtra": 85, "delhi": 72, "karnataka": 45, "tamil nadu": 38},
+    )
+
+
+class HeatmapInsightResponse(BaseModel):
+    """Response from /api/heatmap-insight — AI-generated geographic insight."""
+    insight: str = Field(
+        "",
+        description="1-2 sentence AI-generated insight about the geographic spread pattern. Empty string if generation fails.",
+        example="The claim shows highest interest in Maharashtra and Delhi, likely due to its political nature and urban media consumption patterns.",
+    )
+
+
+class STTResponse(BaseModel):
+    """Response from /api/agents/stt — Speech-to-Text transcription."""
+    transcript: str = Field(..., description="Transcribed text from the uploaded audio", example="क्या यह सच है कि 5G टावर से कोरोना फैलता है")
+
+
+class TTSRequest(BaseModel):
+    """Request body for /api/agents/tts — Text-to-Speech conversion."""
+    text: str = Field(..., description="Text to convert to speech (max 500 characters)", example="This claim is likely false.")
+    language: str = Field(
+        "en-IN",
+        description="Target language for speech: 'hi-IN' (Hindi), 'mr-IN' (Marathi), or 'en-IN' (English)",
+        example="hi-IN",
+    )
+
+
+class RefreshPipelineResponse(BaseModel):
+    """Response from /api/trending/refresh — manual pipeline trigger."""
+    status: str = Field("success", example="success")
+    pipeline_summary: dict = Field(
+        ...,
+        description="Pipeline execution summary with counts",
+        example={
+            "status": "success",
+            "articles_fetched": 30,
+            "articles_filtered": 25,
+            "groq_calls_made": 10,
+            "claims_stored": 7,
+            "claims_skipped": 3,
+            "errors": 0,
+            "duration_seconds": 45.2,
+        },
+    )
+
+
+class HealthResponse(BaseModel):
+    """Response from /health — server liveness probe."""
+    status: str = Field("ok", example="ok")
+    timestamp: str = Field(..., description="Current UTC timestamp", example="2026-04-01T00:00:00+00:00")
+    last_trending_refresh: str = Field(..., description="ISO timestamp of last trending pipeline run, or 'never'", example="2026-03-31T23:00:00+00:00")
+
+
+# ---------------------------------------------------------------------------
+# Request models
+# ---------------------------------------------------------------------------
+
+class AnalyzeClaimRequest(BaseModel):
+    """Request body for /api/analyze-claim."""
+    query: str = Field(
+        ...,
+        description="The news claim or headline to fact-check. Supports English, Hindi, Marathi, and Hinglish.",
+        min_length=1,
+        example="India's GDP grew 15% in 2025",
+    )
+
+
+class HeatmapInsightRequest(BaseModel):
+    """Request body for /api/heatmap-insight."""
+    query: str = Field(..., description="The claim/query text", example="5G towers cause cancer")
+    heatmap_data: dict = Field(
+        ...,
+        description="Region-to-score mapping from /api/heatmap",
+        example={"maharashtra": 85, "delhi": 72, "karnataka": 45},
+    )
+
+
+# ---------------------------------------------------------------------------
+# API Tag metadata for Swagger grouping
+# ---------------------------------------------------------------------------
+
+tags_metadata = [
+    {
+        "name": "🔍 Claim Verification",
+        "description": "Core fact-checking endpoints. Submit a claim (text/image) and receive a multi-language verdict with confidence scores, credibility layers, and source attributions.",
+    },
+    {
+        "name": "🔥 Trending Misinformation",
+        "description": "Endpoints for discovering and managing trending misinformation claims. Data is automatically refreshed every 6 hours from fact-check RSS feeds (AltNews, BoomLive, Snopes, etc.) and analyzed by Groq LLM.",
+    },
+    {
+        "name": "🗺️ Geographic Heatmap",
+        "description": "Regional spread analysis combining Google Trends data, news source coverage mapping, and IP-geolocated user queries to show which Indian states are most affected by a claim.",
+    },
+    {
+        "name": "🎙️ Voice & Speech (Sarvam AI)",
+        "description": "Speech-to-Text and Text-to-Speech endpoints powered by Sarvam AI. Supports Hindi, Marathi, and English for inclusive accessibility.",
+    },
+    {
+        "name": "🖼️ Media Verification",
+        "description": "AI-powered image, video, and audio deepfake detection using Groq Vision (LLaMA multimodal). Analyzes visual artifacts, metadata, and filename signals.",
+    },
+    {
+        "name": "⚙️ System",
+        "description": "Health checks, monitoring, and administrative endpoints.",
+    },
+]
+
+
+# ---------------------------------------------------------------------------
+# FastAPI app with comprehensive OpenAPI documentation
+# ---------------------------------------------------------------------------
+app = FastAPI(
+    title="TruthCrew — AI-Powered Misinformation Detection API",
+    description="""
+## 🛡️ TruthCrew Backend API
+
+**TruthCrew** is an AI-powered misinformation detection platform that verifies news claims 
+using a multi-agent CrewAI pipeline, web search evidence from trusted sources, and a 
+5-layer credibility scoring system.
+
+### 🏗️ Architecture Overview
+- **CrewAI Pipeline**: 3 specialized AI agents (Interpreter → Analyzer → Response Generator) powered by Groq LLaMA 3.3 70B
+- **Web Search**: Priority-based search via SerpAPI (Government → International → National → Regional → Open Web)
+- **Credibility Scoring**: Transparent 5-layer system (Source Tier 35% + Source Count 20% + Evidence Alignment 25% + Claim Verifiability 10% + Cross Agreement 10%)
+- **Database**: MongoDB Atlas with TTL-indexed collections for auto-expiring caches
+- **Media Detection**: Groq Vision (LLaMA 4 Scout) for AI-generated image/video detection
+- **Trending Pipeline**: RSS feeds from fact-check sites → Groq analysis → MongoDB storage (auto-refreshes every 6 hours)
+- **Multilingual**: All results in English, Hindi (Devanagari), and Marathi (Devanagari)
+- **Telegram Bot**: Full-featured bot with voice support via Sarvam AI STT/TTS
+
+### 🔑 Required API Keys
+| Key | Service | Purpose |
+|-----|---------|---------|
+| `GROQ_API_KEY` | Groq Cloud | LLM inference (LLaMA 3.3 70B + LLaMA 4 Scout Vision) |
+| `SEARCH_API_KEY` | SerpAPI | Google Search for evidence gathering |
+| `MONGO_URI` | MongoDB Atlas | Database for caching, trending claims, heatmaps |
+| `SARVAM_API_KEY` | Sarvam AI | Hindi/Marathi/English Speech-to-Text and Text-to-Speech |
+| `TELEGRAM_BOT_TOKEN` | Telegram | Bot integration (optional) |
+
+### 📊 Caching Strategy
+| Cache | TTL | Collection |
+|-------|-----|------------|
+| Claim Analysis | 24 hours | `analysis_cache` |
+| Heatmap Data | 12 hours | `heatmap_cache` |
+| Trending Claims | 7 days | `misinformation_claims` |
+| Regional Queries | 30 days | `regional_queries` |
+""",
+    version="1.0.0",
+    contact={
+        "name": "TruthCrew Team",
+        "url": "https://truthcrew.vercel.app",
+    },
+    license_info={
+        "name": "MIT License",
+    },
+    openapi_tags=tags_metadata,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
+)
 
 # Read allowed origins from env; defaults to "*"
 _cors_origins_raw = os.getenv("CORS_ORIGINS", "*")
@@ -172,20 +427,46 @@ app.include_router(media_verification_router)
 
 
 # ---------------------------------------------------------------------------
-# Existing endpoint — claim verification
+# Claim Verification — /verify
 # ---------------------------------------------------------------------------
-@app.post("/verify")
+@app.post(
+    "/verify",
+    response_model=VerifyResponse,
+    tags=["🔍 Claim Verification"],
+    summary="Verify a news claim (form-data with optional image)",
+    response_description="Verification result with verdict, confidence score, multilingual explanations, and sources",
+)
 async def verify_news(
-    text: Optional[str] = Form(None),
-    image: Optional[UploadFile] = File(None),
+    text: Optional[str] = Form(
+        None,
+        description="The news claim or headline to verify. Supports English, Hindi, Marathi, and Hinglish.",
+    ),
+    image: Optional[UploadFile] = File(
+        None,
+        description="Optional image file to accompany the claim (JPEG, PNG, WebP)",
+    ),
 ):
     """
-    Accepts:
-    - text (optional)
-    - image (optional)
-
-    Returns:
-    - Verification result in English, Hindi, and Marathi
+    ## Verify a News Claim
+    
+    Runs the full **CrewAI multi-agent pipeline** to fact-check a claim:
+    
+    1. **Translation**: Auto-translates Hindi/Marathi/Hinglish claims to English
+    2. **Web Search**: Searches trusted sources via SerpAPI (government → national → open web)
+    3. **Agent 1 — Interpreter**: Restates the claim clearly and summarizes evidence
+    4. **Agent 2 — Analyzer**: Evaluates evidence and assigns a verdict + confidence
+    5. **Agent 3 — Response Generator**: Creates multilingual explanations (EN/HI/MR)
+    6. **Credibility Scoring**: Calculates 5-layer transparency score (0-100)
+    
+    ### Input
+    - At least one of `text` or `image` must be provided
+    - Text can be in English, Hindi, Marathi, or Hinglish
+    
+    ### Response Fields
+    - **verdict**: `Likely True` | `Likely False` | `Likely Misleading`
+    - **confidence**: 0-100 score from the 5-layer credibility system
+    - **english/hindi/marathi**: Explanations in three languages
+    - **sources**: List of news sources with trust indicators
     """
     if text:
         text = text.strip()
@@ -218,18 +499,36 @@ async def verify_news(
 
 
 # ---------------------------------------------------------------------------
-# New: Bot-friendly claim analysis endpoint with caching
+# Claim Analysis — /api/analyze-claim (with caching + heatmap)
 # ---------------------------------------------------------------------------
-class AnalyzeClaimRequest(BaseModel):
-    query: str
-
-
-@app.post("/api/analyze-claim")
+@app.post(
+    "/api/analyze-claim",
+    response_model=AnalyzeClaimResponse,
+    tags=["🔍 Claim Verification"],
+    summary="Analyze a claim with caching, heatmap, and geolocation",
+    response_description="Full analysis result with verdict, credibility layers, sources, top regions, and website URL",
+)
 async def analyze_claim(request: Request, body: AnalyzeClaimRequest):
     """
-    Bot-friendly claim analysis endpoint.
-    Accepts { "query": "..." } and returns a structured result.
-    Results are cached in MongoDB for 24 hours to minimise Groq API usage.
+    ## Analyze a Claim (Bot-Friendly, Cached)
+    
+    Primary endpoint used by the frontend and Telegram bot. Includes:
+    
+    - **MongoDB Caching**: Results cached for 24 hours (saves Groq API calls)
+    - **IP Geolocation**: Tracks which Indian state the user is querying from (via ipinfo.io)
+    - **Combined Heatmap**: Builds a 3-signal regional spread map after analysis
+    - **Website URL**: Returns a direct link to the full analysis on truthcrew.vercel.app
+    
+    ### Pipeline Flow
+    ```
+    Request → Cache Check → [HIT] Return cached result
+                          → [MISS] IP Geolocation → CrewAI Pipeline → Build Heatmap → Cache & Return
+    ```
+    
+    ### Heatmap Signals
+    1. **Google Trends** (50% weight): Real-time search interest by Indian state
+    2. **News Coverage** (30% weight): Regional news source domain mapping
+    3. **User Queries** (20% weight): IP-geolocated user query origins
     """
     import httpx
 
@@ -356,18 +655,40 @@ async def _geolocate_and_save(request: Request, claim_hash: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Trending claims endpoints
+# Trending Claims — /api/trending-claims
 # ---------------------------------------------------------------------------
-@app.get("/api/trending-claims")
+@app.get(
+    "/api/trending-claims",
+    response_model=TrendingClaimsResponse,
+    tags=["🔥 Trending Misinformation"],
+    summary="Get top trending misinformation claims",
+    response_description="List of top 10 trending claims sorted by misleading score",
+)
 async def trending_claims(
     region: Optional[str] = Query(
         default=None,
-        description="Filter by region: global, india, maharashtra, delhi, kerala",
+        description="Filter by region: global, india, maharashtra, delhi, kerala. Leave empty for all regions.",
     )
 ):
     """
-    Return top 10 trending misinformation claims sorted by misleading_score.
-    Optionally filter by ?region=india etc.
+    ## Get Trending Misinformation Claims
+    
+    Returns the top 10 trending misinformation claims from fact-check RSS feeds,
+    sorted by `misleading_score` (highest first).
+    
+    ### Data Source Pipeline
+    ```
+    RSS Feeds (AltNews, BoomLive, Snopes, etc.)
+      → Keyword Filter (skip meta pages)
+      → Groq LLM Analysis (extract false claim + score 50-100)
+      → MongoDB Storage (7-day TTL)
+    ```
+    
+    ### Region Filters
+    - `global` — International claims
+    - `india` — India-specific claims
+    - `maharashtra`, `delhi`, `kerala` — State-specific claims
+    - Omit parameter — All regions
     """
     try:
         claims = get_trending_claims(region=region, limit=10)
@@ -383,15 +704,39 @@ async def trending_claims(
 
 
 # ---------------------------------------------------------------------------
-# Heatmap endpoint — Google Trends
+# Heatmap — /api/heatmap
 # ---------------------------------------------------------------------------
-@app.get("/api/heatmap")
+@app.get(
+    "/api/heatmap",
+    response_model=HeatmapResponse,
+    tags=["🗺️ Geographic Heatmap"],
+    summary="Get regional spread heatmap for a claim",
+    response_description="Dictionary mapping Indian state names to interest scores (0-100)",
+)
 async def heatmap_data(
-    query: str = Query(..., description="The claim/query to fetch spread data for"),
+    query: str = Query(
+        ...,
+        description="The claim or search query to analyze geographic spread for",
+    ),
 ):
     """
-    Returns region-wise Google Trends interest scores (0-100) for India.
-    Results are cached in MongoDB for 12 hours.
+    ## Get Regional Spread Heatmap
+    
+    Returns a state-wise interest score (0-100) for India, combining up to 3 signals:
+    
+    | Signal | Weight | Source |
+    |--------|--------|--------|
+    | Google Trends | 50% | Real-time search interest by region (past 7 days) |
+    | News Coverage | 30% | Regional news domains found in search results |
+    | User Queries | 20% | IP-geolocated user query origins from MongoDB |
+    
+    Results are **cached in MongoDB for 12 hours**. Falls back to deterministic 
+    simulated data (based on query hash) if Google Trends API is unavailable.
+    
+    ### Response Format
+    ```json
+    { "status": "success", "data": { "maharashtra": 85, "delhi": 72, "karnataka": 45 } }
+    ```
     """
     query = query.strip()
     if not query:
@@ -414,11 +759,31 @@ async def heatmap_data(
     return {"status": "success", "data": data}
 
 
-@app.post("/api/trending/refresh")
+# ---------------------------------------------------------------------------
+# Manual Trending Refresh — /api/trending/refresh
+# ---------------------------------------------------------------------------
+@app.post(
+    "/api/trending/refresh",
+    response_model=RefreshPipelineResponse,
+    tags=["🔥 Trending Misinformation"],
+    summary="Manually trigger the trending misinformation refresh pipeline",
+    response_description="Pipeline execution summary with article counts and timing",
+)
 async def manual_refresh():
     """
-    Manually trigger the trending misinformation refresh pipeline.
-    Useful for testing and first-time setup.
+    ## Manually Trigger Trending Refresh
+    
+    Runs the full trending misinformation pipeline on demand:
+    
+    1. **Fetch**: Pull articles from 8 fact-check RSS feeds (AltNews, BoomLive, Snopes, etc.)
+    2. **Filter**: Skip meta-pages and empty descriptions
+    3. **Analyze**: Send up to 10 articles to Groq LLM for misinformation scoring
+    4. **Store**: Upsert claims with score ≥ 50 into MongoDB
+    
+    This pipeline normally runs automatically every 6 hours via APScheduler.
+    Use this endpoint for testing or first-time setup.
+    
+    ⚠️ **Rate Limit**: Groq free tier has API limits. Pipeline includes 3-second delays between calls.
     """
     try:
         logger.info("🔄 Manual refresh triggered via API")
@@ -430,18 +795,30 @@ async def manual_refresh():
 
 
 # ---------------------------------------------------------------------------
-# Heatmap Insight endpoint — AI-generated insight via Groq
+# Heatmap Insight — /api/heatmap-insight
 # ---------------------------------------------------------------------------
-class HeatmapInsightRequest(BaseModel):
-    query: str
-    heatmap_data: dict
-
-
-@app.post("/api/heatmap-insight")
+@app.post(
+    "/api/heatmap-insight",
+    response_model=HeatmapInsightResponse,
+    tags=["🗺️ Geographic Heatmap"],
+    summary="Generate an AI insight about geographic spread patterns",
+    response_description="1-2 sentence AI-generated insight about the claim's geographic spread",
+)
 async def heatmap_insight(body: HeatmapInsightRequest):
     """
-    Generate a brief AI insight about the geographic spread pattern
-    of a claim using Groq LLM.
+    ## Generate Heatmap Insight
+    
+    Uses **Groq LLaMA 3.3 70B** to generate a brief analytical insight about why 
+    certain Indian states show higher interest in a claim.
+    
+    ### Input
+    - `query`: The claim text
+    - `heatmap_data`: The region→score dict from `/api/heatmap`
+    
+    ### Behaviour
+    - Returns an empty string if `GROQ_API_KEY` is not set or generation fails
+    - Uses top 5 regions for the prompt to keep it concise
+    - Temperature: 0.5, Max tokens: 150
     """
     if not body.query.strip() or not body.heatmap_data:
         return {"insight": ""}
@@ -503,11 +880,34 @@ async def heatmap_insight(body: HeatmapInsightRequest):
 # ---------------------------------------------------------------------------
 # Sarvam AI — Speech-to-Text (STT)
 # ---------------------------------------------------------------------------
-@app.post("/api/agents/stt")
-async def sarvam_stt(audio: UploadFile = File(...)):
+@app.post(
+    "/api/agents/stt",
+    response_model=STTResponse,
+    tags=["🎙️ Voice & Speech (Sarvam AI)"],
+    summary="Convert speech audio to text (Hindi/Marathi/English)",
+    response_description="Transcribed text from the uploaded audio file",
+)
+async def sarvam_stt(
+    audio: UploadFile = File(
+        ...,
+        description="Audio file to transcribe (.webm, .wav, .mp3, .ogg). Sarvam auto-detects Hindi, Marathi, and English.",
+    ),
+):
     """
-    Accepts audio upload (.webm/.wav/.mp3/.ogg) and returns transcript via Sarvam AI.
-    Sarvam auto-detects Hindi, Marathi, and English.
+    ## Speech-to-Text (Sarvam AI)
+    
+    Transcribes audio into text using **Sarvam AI's** speech recognition API.
+    Sarvam auto-detects the language (Hindi, Marathi, English).
+    
+    ### Supported Formats
+    - `.webm` (browser recording)
+    - `.wav`, `.mp3`, `.ogg`
+    
+    ### Use Case
+    Used by the Telegram bot to transcribe voice messages before fact-checking.
+    
+    ### Requires
+    - `SARVAM_API_KEY` environment variable
     """
     import httpx
 
@@ -548,10 +948,6 @@ async def sarvam_stt(audio: UploadFile = File(...)):
 # ---------------------------------------------------------------------------
 # Sarvam AI — Text-to-Speech (TTS)
 # ---------------------------------------------------------------------------
-class TTSRequest(BaseModel):
-    text: str
-    language: str = "en-IN"  # "hi-IN" | "mr-IN" | "en-IN"
-
 
 _SARVAM_VOICES = {
     "hi-IN": "priya",
@@ -560,11 +956,40 @@ _SARVAM_VOICES = {
 }
 
 
-@app.post("/api/agents/tts")
+@app.post(
+    "/api/agents/tts",
+    tags=["🎙️ Voice & Speech (Sarvam AI)"],
+    summary="Convert text to speech audio (Hindi/Marathi/English)",
+    response_description="WAV audio stream of the synthesized speech",
+    responses={
+        200: {
+            "content": {"audio/wav": {}},
+            "description": "WAV audio file of the synthesized speech",
+        },
+        400: {"description": "Text is empty"},
+        502: {"description": "Sarvam AI TTS service error"},
+        503: {"description": "SARVAM_API_KEY not configured"},
+    },
+)
 async def sarvam_tts(body: TTSRequest):
     """
-    Converts text to speech via Sarvam AI and returns audio/wav.
-    Sarvam TTS returns base64-encoded WAV inside JSON — decoded here.
+    ## Text-to-Speech (Sarvam AI)
+    
+    Converts text to speech using **Sarvam AI's Bulbul v3** TTS model.
+    Returns a WAV audio stream.
+    
+    ### Voices
+    | Language | Code | Voice |
+    |----------|------|-------|
+    | Hindi | `hi-IN` | Priya |
+    | Marathi | `mr-IN` | Kavitha |
+    | English | `en-IN` | Rahul |
+    
+    ### Limits
+    - Text is truncated to 500 characters (Sarvam API limit)
+    
+    ### Use Case
+    Used by the Telegram bot to send voice responses back to users.
     """
     import httpx
 
@@ -616,13 +1041,25 @@ async def sarvam_tts(body: TTSRequest):
 # ---------------------------------------------------------------------------
 # Health check endpoint - pinged by GitHub Actions cron job every 5 minutes
 # ---------------------------------------------------------------------------
-@app.get("/health")
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+    tags=["⚙️ System"],
+    summary="Server health check (keep-alive probe)",
+    response_description="Server status with last trending refresh timestamp",
+)
 async def health_check():
     """
-    Lightweight liveness probe. Pinged by the GitHub Actions cron job
-    (.github/workflows/keep_alive.yml) every 5 minutes to prevent the free
-    Render server from spinning down.
-    Returns the timestamp of the last successful trending refresh as a bonus.
+    ## Health Check / Liveness Probe
+    
+    Lightweight endpoint pinged by the **GitHub Actions cron job** 
+    (`.github/workflows/keep_alive.yml`) every 5 minutes to prevent the 
+    free Render server from spinning down.
+    
+    ### Response
+    - `status`: Always `"ok"` if server is running
+    - `timestamp`: Current UTC time
+    - `last_trending_refresh`: ISO timestamp of last successful trending pipeline run
     """
     last = get_last_refresh_time()
     if last and last.tzinfo is None:
