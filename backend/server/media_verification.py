@@ -1,79 +1,137 @@
 """
-Media Verification Module — AI Image, Video & Audio Detection
-Uses Groq Vision (LLaMA multimodal) for AI-generated content detection.
-Groq Vision reasons about images holistically — lighting, texture, geometry,
-and stylistic artifacts — rather than relying on a fixed classification head.
+Media Verification Module — AI Image, Video & Deepfake Detection
+Uses SightEngine API — purpose-built models for:
+  - AI-generated image detection (MidJourney, DALL-E, Stable Diffusion, FLUX, etc.)
+  - Deepfake detection (face swaps, face manipulation in real photos/videos)
 """
 
 import os
-import base64
-import json
 import logging
-import re
+import tempfile
 import requests
-from io import BytesIO
 
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import Response
+from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Media Verification"])
 
-MAX_IMAGE_SIZE = 1 * 1024 * 1024        # 1 MB threshold for internal compression
-MAX_IMAGE_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 MB hard limit for uploads
-MAX_VIDEO_UPLOAD_SIZE = 15 * 1024 * 1024  # 15 MB hard limit for videos
-MAX_AUDIO_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB hard limit for audio
+MAX_IMAGE_UPLOAD_SIZE = 20 * 1024 * 1024   # 20 MB
+MAX_VIDEO_UPLOAD_SIZE = 15 * 1024 * 1024   # 15 MB
+MAX_AUDIO_UPLOAD_SIZE = 10 * 1024 * 1024   # 10 MB
 
-GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
-GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+SIGHTENGINE_URL = "https://api.sightengine.com/1.0/check.json"
 
 
 # ---------------------------------------------------------------------------
-# Core: Groq Vision analysis
-# ---------------------------------------------------------------------------
-# AI keyword detection in filename (Python-level, not LLM-level)
+# Helpers
 # ---------------------------------------------------------------------------
 
-_AI_FILENAME_KEYWORDS = {
-    "generated", "generation", "generate",
-    "midjourney", "dalle", "dall_e", "stablediffusion", "stable_diffusion",
-    "sora", "runway", "kling", "pika", "haiper", "luma", "hailuo",
-    "chatgpt", "chat_gpt", "gemini", "firefly", "flux", "ideogram",
-    "deepfake", "deepfakes", "fake", "synthetic", "artificial",
-    "ai_image", "aiimage", "ai_generated", "aigenerated",
-    "ai_video", "aivideo", "ai_art", "aiart",
-}
+def _get_credentials():
+    api_user   = os.getenv("SIGHTENGINE_API_USER")
+    api_secret = os.getenv("SIGHTENGINE_API_SECRET")
+    if not api_user or not api_secret:
+        raise RuntimeError("SIGHTENGINE_API_USER or SIGHTENGINE_API_SECRET not set in environment")
+    return api_user, api_secret
 
-def _filename_ai_score(filename: str) -> int:
+
+def _build_explanation(ai_score: float, deepfake_score: float, verdict: str) -> dict:
+    """Build trilingual explanation based on scores."""
+    ai_pct      = int(ai_score * 100)
+    fake_pct    = int(deepfake_score * 100)
+
+    if verdict == "likely AI-generated":
+        english = (
+            f"This media has a {ai_pct}% probability of being AI-generated. "
+            "Visual analysis detected patterns consistent with AI image generators "
+            "such as MidJourney, DALL-E, Stable Diffusion, or FLUX."
+        )
+        hindi = (
+            f"इस मीडिया के AI-जनित होने की {ai_pct}% संभावना है। "
+            "दृश्य विश्लेषण में MidJourney, DALL-E या Stable Diffusion जैसे "
+            "AI इमेज जनरेटर के पैटर्न पाए गए।"
+        )
+        marathi = (
+            f"या मीडियाची AI-निर्मित असण्याची {ai_pct}% शक्यता आहे। "
+            "दृश्य विश्लेषणात MidJourney, DALL-E किंवा Stable Diffusion सारख्या "
+            "AI इमेज जनरेटरचे नमुने आढळले."
+        )
+    elif verdict == "likely deepfake":
+        english = (
+            f"This media has a {fake_pct}% probability of being a deepfake. "
+            "Facial analysis detected signs of face swapping or AI-based "
+            "facial manipulation."
+        )
+        hindi = (
+            f"इस मीडिया के डीपफेक होने की {fake_pct}% संभावना है। "
+            "चेहरे के विश्लेषण में फेस स्वैपिंग या AI-आधारित चेहरे की "
+            "हेरफेर के संकेत मिले।"
+        )
+        marathi = (
+            f"या मीडियाची डीपफेक असण्याची {fake_pct}% शक्यता आहे। "
+            "चेहऱ्याच्या विश्लेषणात फेस स्वॅपिंग किंवा AI-आधारित "
+            "चेहऱ्याच्या फेरफाराची चिन्हे आढळली."
+        )
+    elif verdict == "uncertain":
+        english = (
+            f"This media shows mixed signals — {ai_pct}% AI-generation probability "
+            f"and {fake_pct}% deepfake probability. It may be partially manipulated "
+            "or heavily edited. Treat with caution."
+        )
+        hindi = (
+            f"इस मीडिया में मिश्रित संकेत हैं — {ai_pct}% AI-जनित संभावना "
+            f"और {fake_pct}% डीपफेक संभावना। यह आंशिक रूप से हेरफेर किया गया हो सकता है।"
+        )
+        marathi = (
+            f"या मीडियामध्ये मिश्र संकेत आहेत — {ai_pct}% AI-निर्मित शक्यता "
+            f"आणि {fake_pct}% डीपफेक शक्यता. हे अंशतः फेरफार केलेले असू शकते."
+        )
+    else:
+        english = (
+            f"This media appears to be authentic. AI-generation probability: {ai_pct}%, "
+            f"deepfake probability: {fake_pct}%. No significant signs of manipulation detected."
+        )
+        hindi = (
+            f"यह मीडिया प्रामाणिक प्रतीत होती है। AI-जनित संभावना: {ai_pct}%, "
+            f"डीपफेक संभावना: {fake_pct}%। कोई महत्वपूर्ण हेरफेर नहीं पाई गई।"
+        )
+        marathi = (
+            f"हे मीडिया प्रामाणिक वाटते. AI-निर्मित शक्यता: {ai_pct}%, "
+            f"डीपफेक शक्यता: {fake_pct}%. कोणताही महत्त्वाचा फेरफार आढळला नाही."
+        )
+
+    return {"english": english, "hindi": hindi, "marathi": marathi}
+
+
+def _score_to_verdict(ai_score: float, deepfake_score: float) -> tuple[str, int]:
     """
-    Check filename for AI generator keywords.
-    Returns 90 if strong AI keyword found, 0 otherwise.
-    This is a hard rule — if the filename says 'generated' or 'midjourney',
-    we override visual analysis with high confidence.
+    Determine verdict and combined probability from SightEngine scores.
+    Returns (verdict, ai_probability_0_to_100)
     """
-    if not filename:
-        return 0
-    name_lower = filename.lower().replace("-", "_").replace(" ", "_")
-    # Remove extension
-    name_lower = os.path.splitext(name_lower)[0]
-    for keyword in _AI_FILENAME_KEYWORDS:
-        if keyword in name_lower:
-            logger.info(f"AI keyword '{keyword}' found in filename '{filename}' — boosting score to 90")
-            return 90
-    return 0
+    combined = max(ai_score, deepfake_score)
+    ai_probability = int(combined * 100)
+
+    if deepfake_score >= 0.70:
+        verdict = "likely deepfake"
+    elif ai_score >= 0.70:
+        verdict = "likely AI-generated"
+    elif combined >= 0.35:
+        verdict = "uncertain"
+    else:
+        verdict = "likely real"
+
+    return verdict, ai_probability
 
 
 # ---------------------------------------------------------------------------
+# Core: SightEngine image analysis
+# ---------------------------------------------------------------------------
 
-def _analyze_with_groq_vision(image_bytes: bytes, context: str = "image", filename: str = "") -> dict:
+def _analyze_image_with_sightengine(image_bytes: bytes, filename: str = "") -> dict:
     """
-    Send an image to Groq Vision (LLaMA multimodal) and ask it to determine
-    whether the image is AI-generated or a real photograph.
-
-    Includes filename as forensic metadata signal — filenames often contain
-    AI generator names (midjourney, dalle, sora, generated, ai, etc.).
-
+    Send image bytes to SightEngine and get AI-generation + deepfake scores.
     Returns:
         {
             "ai_probability": int (0-100),
@@ -81,168 +139,32 @@ def _analyze_with_groq_vision(image_bytes: bytes, context: str = "image", filena
             "explanation": { "english": str, "hindi": str, "marathi": str }
         }
     """
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        raise RuntimeError("GROQ_API_KEY not set in environment")
+    api_user, api_secret = _get_credentials()
 
-    # Compress if needed before base64 encoding
-    if len(image_bytes) > MAX_IMAGE_SIZE:
-        image_bytes = _compress_image(image_bytes)
-
-    b64 = base64.b64encode(image_bytes).decode("utf-8")
-
-    # Build filename metadata hint
-    filename_hint = ""
-    if filename:
-        filename_hint = (
-            f"\n\nFORENSIC METADATA — Filename: '{filename}'\n"
-            "Filenames are a strong forensic signal. Keywords like 'generated', 'ai', "
-            "'midjourney', 'dalle', 'sora', 'runway', 'stable_diffusion', 'synthetic', "
-            "'deepfake', 'fake', 'chatgpt', 'gemini', 'flux', 'firefly' strongly indicate "
-            "AI generation. Platform default names like 'IMG_', 'DSC_', 'WhatsApp Image', "
-            "'Screenshot' suggest a real camera or device. Weight the filename signal "
-            "heavily alongside your visual analysis.\n"
-        )
-
-    prompt = (
-        f"You are an expert forensic media analyst. Examine this {context} carefully.\n\n"
-        "Determine whether it is AI-generated or a real photograph/recording.\n\n"
-        "Look for these AI-generation indicators:\n"
-        "- Unnatural, impossible, or inconsistent lighting and shadows\n"
-        "- Overly smooth, plastic, or airbrushed skin/textures\n"
-        "- Distorted fingers, hands, ears, teeth, or text\n"
-        "- Perfect symmetry that does not occur naturally\n"
-        "- Incoherent or merged background elements\n"
-        "- Painterly, hyper-vivid, or fantasy art style\n"
-        "- Watermarks or style artifacts from Midjourney, DALL-E, Stable Diffusion\n"
-        "- Impossible geometry or physics\n\n"
-        "Real photographs typically have:\n"
-        "- Natural imperfections, grain, motion blur\n"
-        "- Consistent perspective and lighting\n"
-        "- Normal compression artifacts from cameras/phones\n"
-        f"{filename_hint}\n"
-        "Respond ONLY with a valid JSON object:\n"
-        "{\n"
-        '  "ai_probability": <integer 0-100>,\n'
-        '  "english": "<1-2 sentence explanation for a non-technical user>",\n'
-        '  "hindi": "<same explanation in Hindi>",\n'
-        '  "marathi": "<same explanation in Marathi>"\n'
-        "}\n\n"
-        "ai_probability: 0 = definitely real photograph, 100 = definitely AI-generated."
-    )
-
+    files   = {"media": (filename or "image.jpg", image_bytes, "image/jpeg")}
     payload = {
-        "model": GROQ_VISION_MODEL,
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
-                    },
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ],
-        "temperature": 0.1,
-        "max_tokens": 500,
-        "response_format": {"type": "json_object"},
+        "models":     "genai,deepfake",
+        "api_user":   api_user,
+        "api_secret": api_secret,
     }
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-
-    resp = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=30)
+    resp = requests.post(SIGHTENGINE_URL, files=files, data=payload, timeout=30)
     resp.raise_for_status()
+    data = resp.json()
 
-    raw_content = resp.json()["choices"][0]["message"]["content"].strip()
+    if data.get("status") != "success":
+        raise RuntimeError(f"SightEngine error: {data.get('error', {}).get('message', 'Unknown error')}")
 
-    # Extract JSON robustly
-    data = _extract_json(raw_content)
+    ai_score       = float(data.get("type", {}).get("ai_generated", 0))
+    deepfake_score = float(data.get("type", {}).get("deepfake", 0))
 
-    visual_score = max(0, min(100, int(data.get("ai_probability", 50))))
-
-    # Python-level filename check — hard override if AI keywords detected
-    fname_score = _filename_ai_score(filename)
-
-    # Take the higher of visual analysis and filename signal
-    ai_probability = max(visual_score, fname_score)
-
-    # If filename boosted the score, blend explanation naturally
-    if fname_score > visual_score:
-        data["english"] = (
-            "Forensic analysis of the media file's metadata and digital signatures indicates "
-            "characteristics consistent with AI-generated content. "
-            "While the visual quality appears realistic, embedded file properties suggest "
-            "this was produced using an AI generation tool rather than a real camera or recording device."
-        )
-        data["hindi"] = (
-            "मीडिया फ़ाइल के मेटाडेटा और डिजिटल संकेतों के फोरेंसिक विश्लेषण से "
-            "AI-जनित सामग्री के अनुरूप विशेषताएं सामने आती हैं। "
-            "यह वास्तविक कैमरे के बजाय AI टूल से बनाई गई प्रतीत होती है।"
-        )
-        data["marathi"] = (
-            "मीडिया फाइलच्या मेटाडेटा आणि डिजिटल गुणधर्मांच्या फॉरेन्सिक विश्लेषणावरून "
-            "AI-निर्मित सामग्रीशी सुसंगत वैशिष्ट्ये आढळतात। "
-            "हे वास्तविक कॅमेऱ्याऐवजी AI साधनाने तयार केल्याचे दिसते."
-        )
-
-    if ai_probability >= 70:
-        verdict = "likely AI-generated"
-    elif ai_probability >= 35:
-        verdict = "uncertain"
-    else:
-        verdict = "likely real"
+    verdict, ai_probability = _score_to_verdict(ai_score, deepfake_score)
+    explanation = _build_explanation(ai_score, deepfake_score, verdict)
 
     return {
         "ai_probability": ai_probability,
-        "verdict": verdict,
-        "explanation": {
-            "english": data.get("english", "Analysis complete."),
-            "hindi": data.get("hindi", "विश्लेषण पूर्ण।"),
-            "marathi": data.get("marathi", "विश्लेषण पूर्ण."),
-        },
-    }
-
-
-def _extract_json(text: str) -> dict:
-    """Robustly extract a JSON object from LLM output."""
-    # Strip markdown fences
-    cleaned = re.sub(r"```(?:json)?\s*", "", text).strip()
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        pass
-
-    # Brace-depth matching
-    start = cleaned.find("{")
-    if start != -1:
-        depth = 0
-        for i in range(start, len(cleaned)):
-            if cleaned[i] == "{":
-                depth += 1
-            elif cleaned[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    try:
-                        return json.loads(cleaned[start : i + 1])
-                    except json.JSONDecodeError:
-                        break
-
-    # Regex fallback for individual fields
-    prob_match = re.search(r'"ai_probability"\s*:\s*(\d+)', cleaned)
-    en_match = re.search(r'"english"\s*:\s*"((?:[^"\\]|\\.)*)"', cleaned)
-    hi_match = re.search(r'"hindi"\s*:\s*"((?:[^"\\]|\\.)*)"', cleaned)
-    mr_match = re.search(r'"marathi"\s*:\s*"((?:[^"\\]|\\.)*)"', cleaned)
-
-    return {
-        "ai_probability": int(prob_match.group(1)) if prob_match else 50,
-        "english": en_match.group(1) if en_match else "",
-        "hindi": hi_match.group(1) if hi_match else "",
-        "marathi": mr_match.group(1) if mr_match else "",
+        "verdict":        verdict,
+        "explanation":    explanation,
     }
 
 
@@ -263,26 +185,8 @@ async def detect_image(
     ),
 ):
     """
-    ## AI Image Detection (Groq Vision)
-
-    Analyzes an uploaded image using **Groq Vision (LLaMA 4 Scout 17B)** to determine
-    whether it is AI-generated or a real photograph.
-
-    ### Analysis Signals
-    1. **Visual Analysis**: LLM examines lighting, textures, geometry, hands, text, symmetry
-    2. **Filename Metadata**: Checks for AI generator keywords (midjourney, dalle, sora, etc.)
-    3. **Combined Score**: Takes the higher of visual and filename signals
-
-    ### Verdict Thresholds
-    | Score Range | Verdict |
-    |-----------|----------|
-    | 70-100 | Likely AI-Generated |
-    | 35-69 | Uncertain |
-    | 0-34 | Likely Real |
-
-    ### Limits
-    - Max upload size: **20 MB**
-    - Images >1 MB are auto-compressed before analysis
+    Accept an uploaded image and use SightEngine to determine whether it is
+    AI-generated or contains deepfake facial manipulation.
     """
     if not image.content_type or not image.content_type.startswith("image/"):
         raise HTTPException(
@@ -296,7 +200,7 @@ async def detect_image(
     if file_size > MAX_IMAGE_UPLOAD_SIZE:
         raise HTTPException(
             status_code=400,
-            detail=f"Image too large ({file_size / 1024 / 1024:.1f} MB). Max 5 MB allowed.",
+            detail=f"Image too large ({file_size / 1024 / 1024:.1f} MB). Max 20 MB allowed.",
         )
 
     image_bytes = await image.read()
@@ -304,20 +208,20 @@ async def detect_image(
         raise HTTPException(status_code=400, detail="Uploaded image is empty.")
 
     try:
-        result = _analyze_with_groq_vision(image_bytes, context="image", filename=image.filename or "")
+        result = _analyze_image_with_sightengine(image_bytes, filename=image.filename or "image.jpg")
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
-        logger.error(f"Groq Vision error (image): {e!r}")
-        raise HTTPException(status_code=502, detail=f"Vision analysis failed: {e!r}")
+        logger.error(f"SightEngine error (image): {e!r}")
+        raise HTTPException(status_code=502, detail=f"Image analysis failed: {e!r}")
 
     return {
-        "status": "success",
+        "status":         "success",
         "ai_probability": result["ai_probability"],
-        "verdict": result["verdict"],
-        "filename": image.filename,
-        "raw": [{"label": "AI-Generated", "score": result["ai_probability"] / 100}],
-        "explanation": result["explanation"],
+        "verdict":        result["verdict"],
+        "filename":       image.filename,
+        "raw":            [{"label": "AI-Generated", "score": result["ai_probability"] / 100}],
+        "explanation":    result["explanation"],
     }
 
 
@@ -338,20 +242,8 @@ async def detect_video(
     ),
 ):
     """
-    ## AI Video Detection (Frame Analysis)
-
-    Analyzes video by extracting representative frames and running each through
-    **Groq Vision** for AI-generated content detection.
-
-    ### Process
-    1. Extract 3 evenly-spaced frames (start, middle, end) using OpenCV
-    2. Analyze 2 frames (first + middle) with Groq Vision
-    3. Average the AI probability scores
-    4. Apply same verdict thresholds as image detection
-
-    ### Limits
-    - Max upload size: **15 MB**
-    - Frames are compressed to JPEG before analysis
+    Accept an uploaded video, extract 3 representative frames, analyze each
+    with SightEngine, and return the averaged AI probability.
     """
     if not video.content_type or not video.content_type.startswith("video/"):
         raise HTTPException(
@@ -372,8 +264,6 @@ async def detect_video(
     if not video_bytes:
         raise HTTPException(status_code=400, detail="Uploaded video is empty.")
 
-    import tempfile
-
     tmp_video_path = ""
     try:
         ext = (os.path.splitext(video.filename)[1] if video.filename else "") or ".mp4"
@@ -381,25 +271,22 @@ async def detect_video(
             tmp.write(video_bytes)
             tmp_video_path = tmp.name
 
-        # Extract 3 frames (start, middle, end) — analyze 2 to save tokens
         frames = _extract_video_frames(tmp_video_path, num_frames=3)
         if not frames:
             raise HTTPException(status_code=400, detail="Could not extract frames from video.")
 
-        # Analyze first and middle frame
-        frames_to_analyze = [frames[0], frames[len(frames) // 2]]
-        total_prob = 0
-        valid = 0
+        total_prob     = 0
+        valid          = 0
         last_explanation = None
 
-        for frame_bytes in frames_to_analyze:
+        for frame_bytes in frames:
             try:
-                res = _analyze_with_groq_vision(frame_bytes, context="video frame", filename=video.filename or "")
-                total_prob += res["ai_probability"]
-                valid += 1
+                res = _analyze_image_with_sightengine(frame_bytes, filename="frame.jpg")
+                total_prob      += res["ai_probability"]
+                valid           += 1
                 last_explanation = res["explanation"]
             except Exception as e:
-                logger.error(f"Groq Vision error on video frame: {e}")
+                logger.error(f"SightEngine error on video frame: {e}")
 
         if valid == 0:
             raise HTTPException(status_code=502, detail="Failed to analyze video frames.")
@@ -414,12 +301,12 @@ async def detect_video(
             verdict = "likely real"
 
         return {
-            "status": "success",
-            "ai_probability": avg_prob,
-            "verdict": verdict,
-            "filename": video.filename,
-            "raw": [{"label": "AI-Generated", "score": avg_prob / 100}],
-            "explanation": last_explanation,
+            "status":          "success",
+            "ai_probability":  avg_prob,
+            "verdict":         verdict,
+            "filename":        video.filename,
+            "raw":             [{"label": "AI-Generated", "score": avg_prob / 100}],
+            "explanation":     last_explanation,
             "frames_analyzed": valid,
         }
 
@@ -478,21 +365,21 @@ async def detect_audio(
         )
 
     return {
-        "status": "unavailable",
+        "status":         "unavailable",
         "ai_probability": 0,
-        "verdict": "unavailable",
-        "filename": audio.filename,
-        "raw": [],
+        "verdict":        "unavailable",
+        "filename":       audio.filename,
+        "raw":            [],
         "explanation": {
-            "english": "Audio deepfake detection requires dedicated GPU infrastructure. This feature is planned for the next release.",
-            "hindi": "ऑडियो डीपफेक डिटेक्शन के लिए समर्पित GPU इन्फ्रास्ट्रक्चर की आवश्यकता है। यह सुविधा अगले संस्करण में उपलब्ध होगी।",
-            "marathi": "ऑडिओ डीपफेक डिटेक्शनसाठी समर्पित GPU इन्फ्रास्ट्रक्चर आवश्यक आहे. ही सुविधा पुढील आवृत्तीत उपलब्ध होईल.",
+            "english": "Audio deepfake detection requires dedicated infrastructure. This feature is planned for the next release.",
+            "hindi":   "ऑडियो डीपफेक डिटेक्शन के लिए समर्पित इन्फ्रास्ट्रक्चर की आवश्यकता है। यह सुविधा अगले संस्करण में उपलब्ध होगी।",
+            "marathi": "ऑडिओ डीपफेक डिटेक्शनसाठी समर्पित इन्फ्रास्ट्रक्चर आवश्यक आहे. ही सुविधा पुढील आवृत्तीत उपलब्ध होईल.",
         },
     }
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Helpers — Video frame extraction
 # ---------------------------------------------------------------------------
 
 def _extract_video_frames(video_path: str, num_frames: int = 3) -> list[bytes]:
@@ -518,43 +405,9 @@ def _extract_video_frames(video_path: str, num_frames: int = 3) -> list[bytes]:
             pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             buf = BytesIO()
             pil_img.save(buf, format="JPEG", quality=85)
-            frame_bytes_list.append(_compress_image(buf.getvalue()))
+            frame_bytes_list.append(buf.getvalue())
         except Exception as e:
             logger.error(f"Frame extraction error: {e}")
 
     cap.release()
     return frame_bytes_list
-
-
-def _compress_image(image_bytes: bytes, max_size: int = MAX_IMAGE_SIZE) -> bytes:
-    """Compress/resize an image to fit within the size limit."""
-    from PIL import Image
-
-    img = Image.open(BytesIO(image_bytes))
-    if img.mode in ("RGBA", "P"):
-        img = img.convert("RGB")
-
-    quality = 90
-    while quality >= 40:
-        buf = BytesIO()
-        img.save(buf, format="JPEG", quality=quality)
-        if buf.tell() <= max_size:
-            buf.seek(0)
-            return buf.read()
-        quality -= 10
-
-    # Resize if still too large
-    w, h = img.size
-    while w > 256 or h > 256:
-        w, h = int(w * 0.75), int(h * 0.75)
-        resized = img.resize((w, h), Image.LANCZOS)
-        buf = BytesIO()
-        resized.save(buf, format="JPEG", quality=80)
-        if buf.tell() <= max_size:
-            buf.seek(0)
-            return buf.read()
-
-    buf = BytesIO()
-    img.resize((512, 512), Image.LANCZOS).save(buf, format="JPEG", quality=60)
-    buf.seek(0)
-    return buf.read()

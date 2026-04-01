@@ -39,3 +39,9 @@ BACKEND_URL=http://localhost:8000
 # Resemble AI (Audio Deepfake Detection)
 # ===============================
 RESEMBLE_DETECT_API_KEY=your_resemble_detect_api_key_here
+
+# ===============================
+# SightEngine (AI Image + Deepfake Detection)
+# ===============================
+SIGHTENGINE_API_USER=your_sightengine_api_user_here
+SIGHTENGINE_API_SECRET=your_sightengine_api_secret_here
