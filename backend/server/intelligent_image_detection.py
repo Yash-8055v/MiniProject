@@ -588,7 +588,8 @@ Be brutally honest. If something is wrong, say exactly what and where."""
         text = response.content[0].text
 
         # Extract scores
-        scores_match   = re.search(r'SCORES:\s*L1=(\d+)[,\s]+L2=(\d+)[,\s]+L3=(\d+)[,\s]+L4=(\d+)[,\s]+L5=(\d+)[,\s]+L6=(\d+)', text, re.DOTALL)
+        scores_match   = re.search(r'SCORES:.*?L1=(\d+).*?L2=(\d+).*?L3=(\d+).*?L4=(\d+).*?L5=(\d+).*?L6=(\d+)', text, re.DOTALL)
+        logger.info(f"Phase 4 scores_match={bool(scores_match)}, overall_match={bool(re.search(r'OVERALL_PIXEL_SCORE', text))}, raw[:300]={text[:300]!r}")
         overall_match  = re.search(r'OVERALL_PIXEL_SCORE:\s*(\d+)', text)
         type_match     = re.search(r'IMAGE_TYPE:\s*(\w+)', text)
         evidence_match = re.search(r'KEY_EVIDENCE:\s*(.+)', text)
