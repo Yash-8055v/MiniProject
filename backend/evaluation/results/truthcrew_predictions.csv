@@ -1,0 +1,61 @@
+claim_id,claim_text,ground_truth,predicted_verdict,confidence,latency_ms,credibility_score,sources_count,error
+altnews_001,Noida protests: Several unrelated videos shared as scenes of violence during workers’ agitation,False,True,42,16315,0,8,
+altnews_002,"Nida Khan not an HR manager, held no leadership role: TCS refutes media reports",Unverifiable,True,86,13393,0,8,
+altnews_003,Video of security movement in Manipur shared as CRPF entering Bengal to ‘protect Hindus’,False,Misleading,86,13490,0,8,
+altnews_004,Pakistani panelist insulted ABP anchor Chitra Tripathi on live show? Congress leaders share doctored video,False,False,32,13617,0,8,
+altnews_005,CRPF in action in poll-bound Bengal? Old video from Bangladesh shared ly,False,False,32,11399,0,8,
+altnews_006,Trinamool MP Menaka Guruswamy did not represent R G Kar accused in court,False,True,59,12499,0,8,
+altnews_007,"“Others affected too, but Muslims disproportionately targeted in Bengal SIR. This can’t be random”",False,True,64,15679,0,8,
+altnews_008,"Clash in Murshidabad? Old video from Varanasi given communal spin, ly linked to Bengal polls",False,Misleading,81,22269,0,8,
+altnews_009,Shashi Tharoor slammed Modi govt & praised Pak diplomacy? The video is AI-generated,False,Misleading,86,16508,0,8,
+altnews_010,From self-identification to state control: Trans voices raise alarm over new law,False,True,86,20529,0,8,
+boomlive_001,Animals appear to possess a more intuitive understanding of humanity's essence than humans do.,Misleading,Misleading,84,21999,0,8,
+boomlive_002,Sexual Assault Case Of Minor In UP Given Communal Spin,False,True,86,22348,0,8,
+boomlive_003,"The atmosphere has changed with the entry of CRPF in Bengal. The goons are being dug out from the ground. No more talks, straight-up tough action has begun. In Bengal, no more Bhai rule, only Hindu ru",Misleading,False,32,15462,0,8,
+boomlive_004,Huge numbers of crows in Tel Aviv stormed the area for more hell to come. The situation in Israel is terrifying in every respect.,Misleading,Misleading,42,12566,0,8,
+boomlive_005,The video is being shared on X and Facebook claiming that it is from the ongoing protests in Nodia.,False,True,86,14803,0,8,
+boomlive_006,"Video From Brazil Peddled As Woman Raped, Thrown Out Of Car In Haryana",Unverifiable,Misleading,81,24474,0,8,
+boomlive_007,The video is being shared on Facebook claiming that Vance would not be going to Pakistan and will return to the US.,Misleading,Misleading,86,13249,0,8,
+boomlive_008,The two videos are being shared on X with captions claiming that the Indian media is praising Pakistan and criticising the Narendra Modi government for missing out on being a negotiator.,False,False,81,13261,0,8,
+boomlive_009,"The video is being shared on X with the claim that it shows a real heated exchange between a Pakistani panelist and Tripathi. In the video, the panelist is heard taunting her over her appearance and m",False,False,32,10666,0,8,
+boomlive_010,"Lahore"" is spelt as ""Layore"" in the Devanagari script, ""Pakistan"" appears in several nonsensical spellings, and the large red banner across the bottom of the screen reads something resembling ""PAKISTA",False,True,20,14199,0,3,
+boomlive_011,"If you saw Donald Trump's latest tweet crediting Pakistan with stepping in to end the Iranian war, you know why I am in shock. It feels like a massive strategic failure by the Indian government. I hav",False,Misleading,34,11254,0,8,
+boomlive_012,The video is being shared on X with the communal spin claiming that a TMC muslim leader was beaten up by people in West Bengal.,False,Misleading,81,10324,0,8,
+boomlive_013,"Indian armed forces takes over from West Bengal Police now. Now in Malda, No Appeasement, just pure Action in Army style",Misleading,False,70,9957,0,8,
+boomlive_014,This is the helicopter of the superpower America lying down.,True,False,89,10084,0,8,
+boomlive_015,AI Images Of PM Modi's Campaign Trail Shared As Staged Photos,True,True,87,11205,0,8,
+boomlive_016,"Breaking Amit Shah explodes in the Indian parliament, ""Whatever India has done or not done, does not matter because Pakistan is supposed to be a part of India. If Pakistan gets successful in mediation",False,,0,4409,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+boomlive_017,"Political life is different, personal life is different. Honourable PM Shri Narendra Modi ji visiting Smt Sonia Gandhi over her ill health shows true statesmanship, dignity, and compassion beyond poli",True,,0,4110,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+boomlive_018,The 39 seconds video is being shared claiming that Trump said Iran attacked the U.S. aircraft carrier.,False,,0,3772,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+boomlive_019,"If one Shiv temple is broken, BJP does so much drama over it. Demolishing temples is not right. I do not endorse it. How many temples did BJP demolish while making the Kashi Vishwanath temple?",Misleading,,0,3942,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+boomlive_020,"The headquarters of Kalleh Dairy, located in Amol, Mazandaran Province, Iran, was allegedly targeted in an airstrike. Further details regarding the extent of the damage and potential casualties have n",False,,0,4629,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+boomlive_021,Iran has made hell out of Israel.,False,,0,4757,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+boomlive_022,"The video is being shared on X with the caption that the Indian Navy carried out a missile strike on an Iranian warship. The video with the caption was posted by the handle @Proudindiannavi, which has",False,,0,4185,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+boomlive_023,The video is being shared on X with a caption claiming that Iran has struck a U.S. Navy warship attempting to pass through the Strait of Hormuz.,Unverifiable,,0,3795,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_001,5G towers cause COVID-19 and spread the coronavirus through radiation,False,,0,4411,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_002,COVID-19 vaccine contains microchips installed by Bill Gates to track people,False,,0,4450,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_003,Drinking cow urine cures cancer and all terminal diseases,False,,0,3992,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_004,NASA confirmed that Diwali lights in India were visible from space,False,,0,3918,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_005,WhatsApp will start charging users a monthly fee from next month,False,,0,4126,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_006,Albert Einstein failed mathematics in school and was a poor student,False,,0,3949,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_007,Indian government is distributing free laptops to all students across India,False,,0,3419,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_008,India launched Chandrayaan-3 mission to the Moon in July 2023,True,,0,4746,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_009,India became the most populous country surpassing China in 2023,True,,0,4087,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_010,India hosted the G20 Summit in New Delhi in September 2023,True,,0,4005,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_011,WHO declared COVID-19 a pandemic in March 2020,True,,0,3691,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_012,UPI digital payments crossed 10 billion transactions in a single month in India in 2023,True,,0,3781,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_013,भारत सरकार सभी नागरिकों को 15 लाख रुपये दे रही है,False,,0,3903,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_014,गाय का दूध पीने से कैंसर ठीक हो जाता है,False,,0,3904,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_015,पाकिस्तान ने भारत पर परमाणु हमला किया,False,,0,3593,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_016,5G टावर से कोरोना वायरस फैलता है,False,,0,3608,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_017,सरकार ने पेट्रोल की कीमत 40 रुपये प्रति लीटर कर दी है,False,,0,3642,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_018,भारत ने 2023 में चंद्रयान-3 सफलतापूर्वक चंद्रमा पर उतारा,True,,0,3696,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_019,भारत ने 2023 में G20 शिखर सम्मेलन की मेजबानी की,True,,0,3873,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_020,मोदी सरकार ने किसानों का कर्ज माफ कर दिया,Misleading,,0,3722,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_021,महाराष्ट्र सरकार प्रत्येक कुटुंबाला 5 लाख रुपये देत आहे,False,,0,3967,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_022,पुण्यात 5G टॉवरमुळे पक्षी मरत आहेत,False,,0,3841,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_023,मुंबईत भूकंप आला आणि 500 इमारती कोसळल्या,False,,0,6004,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_024,महाराष्ट्रात 2024 मध्ये विधानसभा निवडणुका झाल्या,True,,0,3642,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_025,Eating raw garlic and onion juice completely prevents and cures dengue fever,Misleading,,0,3938,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_026,Petrol prices will be reduced to Rs 40 per litre after new government order,False,,0,3651,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim
+manual_027,India has been declared the most peaceful country in the world by the United Nations,False,,0,3963,0,0,500 Server Error: Internal Server Error for url: http://localhost:8000/api/analyze-claim

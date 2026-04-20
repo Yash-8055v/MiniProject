@@ -1,0 +1,12 @@
+{
+  "fleiss_kappa": 0.0371,
+  "interpretation": "Slight agreement",
+  "n_claims": 60,
+  "n_annotators": 3,
+  "models": [
+    "llama-3.3-70b-versatile",
+    "qwen/qwen3-32b",
+    "llama-3.1-8b-instant"
+  ],
+  "methodology": "Three LLM annotators on Groq (not humans). May have higher correlation than independent human raters."
+}

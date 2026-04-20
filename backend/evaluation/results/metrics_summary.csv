@@ -1,0 +1,6 @@
+System,Accuracy_4class,Accuracy_binary,Macro_F1,Weighted_F1,Wilson_CI_lower,Wilson_CI_upper,N
+TruthCrew,0.32,0.64,0.2396,0.3229,0.172,0.5159,25
+LIAR_LogReg,0.45,0.7333,0.3156,0.4513,0.3309,0.5751,60
+FakeBERT,0.6833,0.7833,0.3272,0.604,0.5577,0.7869,60
+Llama3.3_ZS,0.6167,0.7333,0.499,0.6592,0.4902,0.7291,60
+Qwen3_ZS,0.6,0.75,0.4278,0.6171,0.4737,0.7143,60

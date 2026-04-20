@@ -1,0 +1,11 @@
+langdetect
+beautifulsoup4
+deep-translator
+scikit-learn
+transformers
+torch
+datasets
+statsmodels
+scipy
+matplotlib
+seaborn

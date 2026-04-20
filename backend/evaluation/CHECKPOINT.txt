@@ -1,0 +1,100 @@
+============================================================
+TRUTHCREW EVALUATION BENCHMARK — CHECKPOINT FILE
+============================================================
+This file tracks progress across model switches.
+Any model can read this file to know where to resume.
+============================================================
+
+LAST_UPDATED: 2026-04-20T00:55:00+05:30
+CURRENT_PHASE: 6
+CURRENT_STEP: waiting_for_background_tasks_to_complete
+
+------------------------------------------------------------
+PHASE 0: SETUP
+------------------------------------------------------------
+STATUS: DONE
+- [x] Install evaluation dependencies (uv pip install into .venv)
+- [x] Verify Groq API key works
+- [x] Created key_manager.py with 3 Groq + 2 SerpAPI keys
+
+------------------------------------------------------------
+PHASE 1: SCRAPE 60 CLAIMS
+------------------------------------------------------------
+STATUS: DONE
+CLAIMS_SCRAPED: 60/60
+DATASET_FILE: evaluation/dataset/claims_60.csv
+JSON_FILE: evaluation/dataset/claims_60.json
+DISTRIBUTION:
+  Verdicts: False=38, Misleading=8, True=11, Unverifiable=3
+  Languages: en=48, hi=8, mr=4
+  Sources: AltNews=16, BoomLive=30, VishvasNews=4, others=10
+
+------------------------------------------------------------
+PHASE 2: INTER-ANNOTATOR AGREEMENT
+------------------------------------------------------------
+STATUS: DONE
+CLAIMS_ANNOTATED: 60/60
+ANNOTATIONS_FILE: evaluation/dataset/annotations.csv
+FLEISS_KAPPA: 0.0371 (Slight agreement)
+KAPPA_FILE: evaluation/results/fleiss_kappa.json
+MODELS_USED:
+  - annotator_a: llama-3.3-70b-versatile (Meta)
+  - annotator_b: qwen/qwen3-32b (Alibaba)
+  - annotator_c: llama-3.1-8b-instant (Meta)
+NOTE: gemma2-9b-it was NOT available on Groq, replaced with qwen3-32b
+
+------------------------------------------------------------
+PHASE 3: RUN TRUTHCREW
+------------------------------------------------------------
+STATUS: IN_PROGRESS (Running in background)
+CLAIMS_PROCESSED: ~25/60
+CHECKPOINT_FILE: evaluation/results/truthcrew_predictions.csv
+BACKEND_URL: http://localhost:8000
+ENDPOINT: POST /api/analyze-claim  body: {"query": "..."}
+- [x] Start local server
+- [ ] Process all 60 claims (resumable CSV)
+
+------------------------------------------------------------
+PHASE 4: BASELINES
+------------------------------------------------------------
+STATUS: DONE
+- [x] LIAR LogReg (baseline_liar) -> 65.0%
+- [x] FakeBERT (baseline_fakebert) -> 68.3%
+- [x] Llama 3.3 ZS (baseline_llama) -> 66.7%
+- [x] Qwen3 ZS ZS (baseline_llm) -> 66.7%
+
+------------------------------------------------------------
+PHASE 5: ABLATION STUDY (60 claims × 6 configs)
+------------------------------------------------------------
+STATUS: IN_PROGRESS (Running in background)
+CLAIMS_PROCESSED: ~30/60
+CONFIGS_DONE: All running simultaneously
+CHECKPOINT_FILE: evaluation/results/ablation_study.csv
+
+------------------------------------------------------------
+PHASE 6: METRICS
+------------------------------------------------------------
+STATUS: AUTOMATED
+(Script `wait_and_report.py` will run this automatically after P3 and P5)
+
+------------------------------------------------------------
+PHASE 7: FINAL REPORT
+------------------------------------------------------------
+STATUS: AUTOMATED
+(Script `wait_and_report.py` will generate `FINAL_EVALUATION_REPORT.md` automatically)
+
+============================================================
+NOTES FOR RESUMING MODELS:
+============================================================
+1. Read this file first to know current progress
+2. Check CSV checkpoint files — they contain per-row results
+3. Skip any claim_id already present in the checkpoint CSV
+4. API keys are in evaluation/key_manager.py (rotation logic)
+5. All scripts are in evaluation/ directory
+6. Run from: c:\Users\admin\Downloads\minipro\MiniProject\backend\
+7. Use venv: .\.venv\Scripts\python.exe -m evaluation.<script>
+8. Dataset: evaluation/dataset/claims_60.csv (60 claims)
+9. Available Groq models: llama-3.3-70b-versatile, qwen/qwen3-32b,
+   llama-3.1-8b-instant, meta-llama/llama-4-scout-17b-16e-instruct,
+   openai/gpt-oss-120b, openai/gpt-oss-20b
+============================================================

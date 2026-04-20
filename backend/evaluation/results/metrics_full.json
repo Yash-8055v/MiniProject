@@ -1,0 +1,381 @@
+{
+  "TruthCrew": {
+    "system": "TruthCrew",
+    "accuracy_4class": 0.32,
+    "accuracy_binary": 0.64,
+    "accuracy_4class_full": 0.1333,
+    "accuracy_binary_full": 0.2667,
+    "correct_4class": 8,
+    "correct_binary": 16,
+    "total": 25,
+    "total_claims": 60,
+    "failed_claims": [
+      "boomlive_016",
+      "boomlive_017",
+      "boomlive_018",
+      "boomlive_019",
+      "boomlive_020",
+      "boomlive_021",
+      "boomlive_022",
+      "boomlive_023",
+      "manual_001",
+      "manual_002",
+      "manual_003",
+      "manual_004",
+      "manual_005",
+      "manual_006",
+      "manual_007",
+      "manual_008",
+      "manual_009",
+      "manual_010",
+      "manual_011",
+      "manual_012",
+      "manual_013",
+      "manual_014",
+      "manual_015",
+      "manual_016",
+      "manual_017",
+      "manual_018",
+      "manual_019",
+      "manual_020",
+      "manual_021",
+      "manual_022",
+      "manual_023",
+      "manual_024",
+      "manual_025",
+      "manual_026",
+      "manual_027"
+    ],
+    "macro_f1": 0.2396,
+    "weighted_f1": 0.3229,
+    "per_class": {
+      "True": {
+        "precision": 0.1111,
+        "recall": 0.5,
+        "f1": 0.1818,
+        "support": 2
+      },
+      "False": {
+        "precision": 0.5714,
+        "recall": 0.25,
+        "f1": 0.3478,
+        "support": 16
+      },
+      "Misleading": {
+        "precision": 0.3333,
+        "recall": 0.6,
+        "f1": 0.4286,
+        "support": 5
+      },
+      "Unverifiable": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 2
+      }
+    },
+    "wilson_ci_95": [
+      0.172,
+      0.5159
+    ],
+    "per_language": {
+      "en": {
+        "accuracy": 0.2708,
+        "correct": 13,
+        "total": 48
+      },
+      "hi": {
+        "accuracy": 0.0,
+        "correct": 0,
+        "total": 8
+      },
+      "mr": {
+        "accuracy": 0.0,
+        "correct": 0,
+        "total": 4
+      }
+    },
+    "latency": {
+      "mean_ms": 8544,
+      "median_ms": 4430,
+      "p95_ms": 22012,
+      "min_ms": 3419,
+      "max_ms": 24474,
+      "n_samples": 60
+    }
+  },
+  "LIAR_LogReg": {
+    "system": "LIAR_LogReg",
+    "accuracy_4class": 0.45,
+    "accuracy_binary": 0.7333,
+    "accuracy_4class_full": 0.45,
+    "accuracy_binary_full": 0.7333,
+    "correct_4class": 27,
+    "correct_binary": 44,
+    "total": 60,
+    "total_claims": 60,
+    "failed_claims": [],
+    "macro_f1": 0.3156,
+    "weighted_f1": 0.4513,
+    "per_class": {
+      "True": {
+        "precision": 0.45,
+        "recall": 0.8182,
+        "f1": 0.5806,
+        "support": 11
+      },
+      "False": {
+        "precision": 0.64,
+        "recall": 0.4211,
+        "f1": 0.5079,
+        "support": 38
+      },
+      "Misleading": {
+        "precision": 0.1333,
+        "recall": 0.25,
+        "f1": 0.1739,
+        "support": 8
+      },
+      "Unverifiable": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 3
+      }
+    },
+    "wilson_ci_95": [
+      0.3309,
+      0.5751
+    ],
+    "per_language": {
+      "en": {
+        "accuracy": 0.6042,
+        "correct": 29,
+        "total": 48
+      },
+      "hi": {
+        "accuracy": 0.875,
+        "correct": 7,
+        "total": 8
+      },
+      "mr": {
+        "accuracy": 0.75,
+        "correct": 3,
+        "total": 4
+      }
+    }
+  },
+  "FakeBERT": {
+    "system": "FakeBERT",
+    "accuracy_4class": 0.6833,
+    "accuracy_binary": 0.7833,
+    "accuracy_4class_full": 0.6833,
+    "accuracy_binary_full": 0.7833,
+    "correct_4class": 41,
+    "correct_binary": 47,
+    "total": 60,
+    "total_claims": 60,
+    "failed_claims": [],
+    "macro_f1": 0.3272,
+    "weighted_f1": 0.604,
+    "per_class": {
+      "True": {
+        "precision": 0.5556,
+        "recall": 0.4545,
+        "f1": 0.5,
+        "support": 11
+      },
+      "False": {
+        "precision": 0.7059,
+        "recall": 0.9474,
+        "f1": 0.809,
+        "support": 38
+      },
+      "Misleading": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 8
+      },
+      "Unverifiable": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 3
+      }
+    },
+    "wilson_ci_95": [
+      0.5577,
+      0.7869
+    ],
+    "per_language": {
+      "en": {
+        "accuracy": 0.6667,
+        "correct": 32,
+        "total": 48
+      },
+      "hi": {
+        "accuracy": 0.75,
+        "correct": 6,
+        "total": 8
+      },
+      "mr": {
+        "accuracy": 0.75,
+        "correct": 3,
+        "total": 4
+      }
+    }
+  },
+  "Llama3.3_ZS": {
+    "system": "Llama3.3_ZS",
+    "accuracy_4class": 0.6167,
+    "accuracy_binary": 0.7333,
+    "accuracy_4class_full": 0.6167,
+    "accuracy_binary_full": 0.7333,
+    "correct_4class": 37,
+    "correct_binary": 44,
+    "total": 60,
+    "total_claims": 60,
+    "failed_claims": [],
+    "macro_f1": 0.499,
+    "weighted_f1": 0.6592,
+    "per_class": {
+      "True": {
+        "precision": 0.6364,
+        "recall": 0.6364,
+        "f1": 0.6364,
+        "support": 11
+      },
+      "False": {
+        "precision": 0.8621,
+        "recall": 0.6579,
+        "f1": 0.7463,
+        "support": 38
+      },
+      "Misleading": {
+        "precision": 0.4444,
+        "recall": 0.5,
+        "f1": 0.4706,
+        "support": 8
+      },
+      "Unverifiable": {
+        "precision": 0.0909,
+        "recall": 0.3333,
+        "f1": 0.1429,
+        "support": 3
+      }
+    },
+    "wilson_ci_95": [
+      0.4902,
+      0.7291
+    ],
+    "per_language": {
+      "en": {
+        "accuracy": 0.6042,
+        "correct": 29,
+        "total": 48
+      },
+      "hi": {
+        "accuracy": 1.0,
+        "correct": 8,
+        "total": 8
+      },
+      "mr": {
+        "accuracy": 0.75,
+        "correct": 3,
+        "total": 4
+      }
+    }
+  },
+  "Qwen3_ZS": {
+    "system": "Qwen3_ZS",
+    "accuracy_4class": 0.6,
+    "accuracy_binary": 0.75,
+    "accuracy_4class_full": 0.6,
+    "accuracy_binary_full": 0.75,
+    "correct_4class": 36,
+    "correct_binary": 45,
+    "total": 60,
+    "total_claims": 60,
+    "failed_claims": [],
+    "macro_f1": 0.4278,
+    "weighted_f1": 0.6171,
+    "per_class": {
+      "True": {
+        "precision": 0.8571,
+        "recall": 0.5455,
+        "f1": 0.6667,
+        "support": 11
+      },
+      "False": {
+        "precision": 0.7368,
+        "recall": 0.7368,
+        "f1": 0.7368,
+        "support": 38
+      },
+      "Misleading": {
+        "precision": 0.2,
+        "recall": 0.125,
+        "f1": 0.1538,
+        "support": 8
+      },
+      "Unverifiable": {
+        "precision": 0.1,
+        "recall": 0.3333,
+        "f1": 0.1538,
+        "support": 3
+      }
+    },
+    "wilson_ci_95": [
+      0.4737,
+      0.7143
+    ],
+    "per_language": {
+      "en": {
+        "accuracy": 0.6875,
+        "correct": 33,
+        "total": 48
+      },
+      "hi": {
+        "accuracy": 0.75,
+        "correct": 6,
+        "total": 8
+      },
+      "mr": {
+        "accuracy": 0.25,
+        "correct": 1,
+        "total": 4
+      }
+    }
+  },
+  "mcnemar_tests": {
+    "TruthCrew_vs_LIAR_LogReg": {
+      "chi2": 19.5312,
+      "p_value": 0.0,
+      "significant": "True",
+      "b_wrong_a_right": 3,
+      "b_right_a_wrong": 29
+    },
+    "TruthCrew_vs_FakeBERT": {
+      "chi2": 20.25,
+      "p_value": 0.0,
+      "significant": "True",
+      "b_wrong_a_right": 4,
+      "b_right_a_wrong": 32
+    },
+    "TruthCrew_vs_Llama3.3_ZS": {
+      "chi2": 15.7209,
+      "p_value": 0.0001,
+      "significant": "True",
+      "b_wrong_a_right": 8,
+      "b_right_a_wrong": 35
+    },
+    "TruthCrew_vs_Qwen3_ZS": {
+      "chi2": 18.2703,
+      "p_value": 0.0,
+      "significant": "True",
+      "b_wrong_a_right": 5,
+      "b_right_a_wrong": 32
+    }
+  }
+}
